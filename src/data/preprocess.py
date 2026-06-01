@@ -25,17 +25,13 @@ from bs4 import BeautifulSoup, Tag
 # Wraps mineru_html's simplify_html to give you two parallel block sequences.
 class DripperPreprocessor:
     def __init__(self):
-        self._simplify_fn = self._load_simplify_fn()
-
-    def _load_simplify_fn(self):
         try:
             from mineru_html.process.simplify_html import simplify_html
             print("[DripperPreprocessor] Using mineru_html.process.simplify_html")
-            return simplify_html
+            self._simplify_fn = simplify_html
         except ImportError as e:
             print("IMPORT ERROR:", e)
             raise
-
     def process(self, raw_html: str) -> tuple[list[Tag], list[Tag]]:
         simplified_html_str, mapping_html_str = self._simplify_fn(raw_html)
         simplified_blocks = self._parse_blocks(simplified_html_str)
@@ -91,7 +87,7 @@ _BOILERPLATE_KEYWORDS = re.compile(
     re.IGNORECASE
 )
 
-# Tags that naturally create block boundaries (Appendix I, Step 3)
+# Tags that naturally create block boundaries
 _BLOCK_TAGS = {
     'div', 'p', 'section', 'article', 'main', 'li', 'td', 'th',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -296,25 +292,6 @@ class LabelGenerator:
             overlap = sum(1 for w in block_words if w in main_words) / len(block_words)
             labels.append(1 if overlap >= self.overlap_threshold else 0)
         return labels
-
-    def from_dripper_output(self,
-                            simplified_blocks: list[Tag],
-                            dripper_labels: dict[str, str]) -> list[int]:
-        """
-        Format 3 (Dripper silver labels): labels come from Dripper-0.6B's
-        JSON output ({"1": "main", "2": "other", ...}).
-        Use this to train on large-scale CommonCrawl data without manual annotation.
-
-        Args:
-            dripper_labels: dict mapping item_id (str) → "main"/"other"
-        """
-        labels = []
-        for block in simplified_blocks:
-            item_id = block.get('_item_id', '0')
-            label_str = dripper_labels.get(str(item_id), 'other')
-            labels.append(1 if label_str == 'main' else 0)
-        return labels
-
 
 # =============================================================================
 # STEP 4 – PYTORCH DATASET

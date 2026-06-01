@@ -1,61 +1,164 @@
+"""
+BiLSTM block tagger for the Dripper-style HTML main-content-extraction task.
+
+Designed to plug directly into the pipeline in preprocess.py:
+    - input : (batch, seq_len, FEATURE_DIM)  feature matrices  (FEATURE_DIM = 49)
+    - output: (batch, seq_len, 2)            per-block logits (0=boilerplate, 1=content)
+
+It consumes exactly what `collate_fn` produces:
+    features_padded (B, T, 49) | labels_padded (B, T, -100 pad) | lengths (B,) | mask (B, T)
+"""
+
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
+# FEATURE_DIM from the preprocessing pipeline. Imported there as a constant;
+# hard-coded here so this file is runnable standalone.
+FEATURE_DIM = 49
+NUM_CLASSES = 2
+PAD_LABEL = -100  # must match collate_fn's labels padding_value
 
 
-class LSTMBoilerplateClassifier(nn.Module):
-    def __init__(
-            self,
-            vocab_size: int,
-            embed_dim: int = 128,
-            hidden_dim: int = 256,
-            num_layers: int = 2,
-            num_tags: int = 64,  # number of unique HTML tags
-            tag_embed_dim: int = 16,
-            structural_dim: int = 4,  # depth, link_density, position, text_len
-            dropout: float = 0.3,
-            bidirectional: bool = True,
-    ):
+# =============================================================================
+# MODEL
+# =============================================================================
+class BiLSTMBlockTagger(nn.Module):
+    def __init__(self,
+                 input_dim: int = FEATURE_DIM,
+                 hidden_dim: int = 128,
+                 num_layers: int = 2,
+                 num_classes: int = NUM_CLASSES,
+                 dropout: float = 0.3):
         super().__init__()
-
-        self.token_embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
-        self.tag_embedding = nn.Embedding(num_tags, tag_embed_dim)
-
-        lstm_input_dim = embed_dim + tag_embed_dim + structural_dim
-
         self.lstm = nn.LSTM(
-            input_size=lstm_input_dim,
+            input_size=input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0,
-            bidirectional=bidirectional,
+            bidirectional=True,
+            # NOTE: nn.LSTM's internal dropout only fires between stacked layers,
+            # so it is a no-op when num_layers == 1.
+            dropout=dropout if num_layers > 1 else 0.0,
         )
+        self.dropout = nn.Dropout(dropout)
+        # *2 because the sequence is read in both directions.
+        self.classifier = nn.Linear(hidden_dim * 2, num_classes)
 
-        direction_factor = 2 if bidirectional else 1
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_dim * direction_factor, 64),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(64, 1),  # binary: content vs boilerplate
+    def forward(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """
+        features: (B, T, input_dim)
+        lengths:  (B,) real sequence lengths (must be on CPU for packing)
+        returns:  (B, T, num_classes) logits
+        """
+        # Pack so the (backward) LSTM never ingests padded timesteps.
+        # enforce_sorted=False because collate_fn does not sort the batch by length.
+        packed = pack_padded_sequence(
+            features, lengths.cpu(), batch_first=True, enforce_sorted=False
         )
+        packed_out, _ = self.lstm(packed)
 
-    def forward(self, token_ids, tag_ids, structural_feats, lengths):
-        # token_ids: (batch, seq_len)
-        # tag_ids: (batch, seq_len)
-        # structural_feats: (batch, seq_len, structural_dim)
-        # lengths: (batch,) actual lengths for packing
-
-        tok_emb = self.token_embedding(token_ids)  # (B, L, embed_dim)
-        tag_emb = self.tag_embedding(tag_ids)  # (B, L, tag_embed_dim)
-
-        x = torch.cat([tok_emb, tag_emb, structural_feats], dim=-1)
-
-        # Pack for efficiency with variable-length sequences
-        packed = nn.utils.rnn.pack_padded_sequence(
-            x, lengths.cpu(), batch_first=True, enforce_sorted=False
+        # total_length pins the restored length to T so it matches labels/mask shapes.
+        out, _ = pad_packed_sequence(
+            packed_out, batch_first=True, total_length=features.size(1)
         )
-        output, _ = self.lstm(packed)
-        output, _ = nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
+        out = self.dropout(out)
+        return self.classifier(out)  # (B, T, num_classes)
 
-        logits = self.classifier(output).squeeze(-1)  # (B, L)
-        return logits  # use BCEWithLogitsLoss during training
+
+# =============================================================================
+# CLASS WEIGHTS (handle boilerplate/content imbalance)
+# =============================================================================
+def compute_class_weights(dataset, num_classes: int = NUM_CLASSES) -> torch.Tensor:
+    """
+    Inverse-frequency class weights from the *training* dataset.
+    Pass these to CrossEntropyLoss(weight=...) so the minority content class counts more.
+    """
+    all_labels = np.concatenate([s["labels"] for s in dataset._samples])
+    all_labels = all_labels[all_labels != PAD_LABEL]  # ignore any pad sentinels
+    counts = np.bincount(all_labels, minlength=num_classes).astype(np.float64)
+    counts = np.clip(counts, 1.0, None)               # avoid div-by-zero
+    weights = counts.sum() / (num_classes * counts)   # balanced weighting
+    return torch.tensor(weights, dtype=torch.float32)
+
+
+# =============================================================================
+# TRAIN / EVAL LOOPS
+# =============================================================================
+def train_one_epoch(model, loader, criterion, optimizer, device) -> float:
+    model.train()
+    total_loss, total_tokens = 0.0, 0
+    for features, labels, lengths, mask in loader:
+        features, labels = features.to(device), labels.to(device)
+        # lengths stays on CPU for packing.
+
+        optimizer.zero_grad()
+        logits = model(features, lengths)                       # (B, T, C)
+        # CrossEntropyLoss ignores PAD_LABEL automatically -> no manual masking needed.
+        loss = criterion(logits.reshape(-1, NUM_CLASSES), labels.reshape(-1))
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)  # LSTMs benefit from clipping
+        optimizer.step()
+
+        n = int(mask.sum().item())
+        total_loss += loss.item() * n
+        total_tokens += n
+    return total_loss / max(total_tokens, 1)
+
+
+@torch.no_grad()
+def evaluate(model, loader, device) -> dict:
+    """Returns precision/recall/F1 for the CONTENT class (1), computed only on real blocks."""
+    model.eval()
+    tp = fp = fn = tn = 0
+    for features, labels, lengths, mask in loader:
+        features = features.to(device)
+        logits = model(features, lengths)                 # (B, T, C)
+        preds = logits.argmax(dim=-1).cpu()               # (B, T)
+
+        m = mask.cpu().bool()
+        p = preds[m]
+        y = labels[m]                                     # already excludes pad via mask
+
+        tp += int(((p == 1) & (y == 1)).sum())
+        fp += int(((p == 1) & (y == 0)).sum())
+        fn += int(((p == 0) & (y == 1)).sum())
+        tn += int(((p == 0) & (y == 0)).sum())
+
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall    = tp / (tp + fn) if (tp + fn) else 0.0
+    f1        = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    accuracy  = (tp + tn) / max(tp + fp + fn + tn, 1)
+    return {"precision": precision, "recall": recall, "f1": f1, "accuracy": accuracy}
+
+
+# =============================================================================
+# USAGE SKETCH
+# =============================================================================
+if __name__ == "__main__":
+    from torch.utils.data import DataLoader
+    # from preprocess import HTMLExtractionDataset, FeatureNormalizer, collate_fn
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # --- assume you already built train_dataset / val_dataset and normalised them ---
+    # normalizer = FeatureNormalizer(); normalizer.fit(train_dataset)
+    # train_dataset = normalizer.transform(train_dataset)
+    # val_dataset   = normalizer.transform(val_dataset)
+
+    # train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True,  collate_fn=collate_fn)
+    # val_loader   = DataLoader(val_dataset,   batch_size=16, shuffle=False, collate_fn=collate_fn)
+
+    model = BiLSTMBlockTagger().to(device)
+    # weights = compute_class_weights(train_dataset).to(device)
+    # criterion = nn.CrossEntropyLoss(weight=weights, ignore_index=PAD_LABEL)
+    criterion = nn.CrossEntropyLoss(ignore_index=PAD_LABEL)  # add weight=... in real runs
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+
+    # for epoch in range(20):
+    #     loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
+    #     metrics = evaluate(model, val_loader, device)
+    #     print(f"epoch {epoch:02d} | loss {loss:.4f} | "
+    #           f"F1(content) {metrics['f1']:.3f} | recall {metrics['recall']:.3f}")
+    print("Model built:", model)
