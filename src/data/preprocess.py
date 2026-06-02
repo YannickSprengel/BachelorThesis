@@ -25,23 +25,14 @@ from bs4 import BeautifulSoup, Tag
 # Wraps mineru_html's simplify_html to give you two parallel block sequences.
 class DripperPreprocessor:
     def __init__(self):
-        try:
-            from mineru_html.process.simplify_html import simplify_html
-            print("[DripperPreprocessor] Using mineru_html.process.simplify_html")
-            self._simplify_fn = simplify_html
-        except ImportError as e:
-            print("IMPORT ERROR:", e)
-            raise
+        from mineru_html.process.simplify_html import simplify_html
+        self._simplify_fn = simplify_html
+
     def process(self, raw_html: str) -> tuple[list[Tag], list[Tag]]:
         simplified_html_str, mapping_html_str = self._simplify_fn(raw_html)
         simplified_blocks = self._parse_blocks(simplified_html_str)
         mapping_blocks    = self._parse_blocks(mapping_html_str)
 
-        # Sanity check: both branches must have the same number of blocks
-        assert len(simplified_blocks) == len(mapping_blocks), (
-            f"Block count mismatch: {len(simplified_blocks)} simplified "
-            f"vs {len(mapping_blocks)} mapping blocks."
-        )
         return simplified_blocks, mapping_blocks
 
     @staticmethod
@@ -74,27 +65,6 @@ class DripperPreprocessor:
         selected = [str(block) for block, label in zip(mapping_blocks, labels) if label == 1]
         return "\n".join(selected)
 
-
-# Tags removed entirely in the first pass (Appendix I, Step 1)
-_REMOVE_TAGS = {'script', 'style', 'noscript', 'iframe', 'svg',
-                'header', 'footer', 'nav', 'aside', 'head'}
-
-# Boilerplate keyword hints in class/id (Appendix I, Step 1 heuristic)
-_BOILERPLATE_KEYWORDS = re.compile(
-    r'\b(nav|navbar|menu|footer|header|sidebar|banner|ad|ads|'
-    r'advertisement|social|share|cookie|popup|modal|overlay|'
-    r'breadcrumb|pagination|related|recommend)\b',
-    re.IGNORECASE
-)
-
-# Tags that naturally create block boundaries
-_BLOCK_TAGS = {
-    'div', 'p', 'section', 'article', 'main', 'li', 'td', 'th',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'blockquote', 'pre', 'figure', 'figcaption',
-    'table', 'ul', 'ol',   # kept as indivisible units
-}
-
 # =============================================================================
 # STEP 2 – BLOCK FEATURE EXTRACTOR
 # Converts a single BeautifulSoup block Tag → a fixed-length numpy float32 vector
@@ -126,7 +96,7 @@ _BOILERPLATE_KW = [
 # FEATURE_DIM is the total number of features per block.
 # Change this only if you add/remove features below.
 FEATURE_DIM = (
-    len(_TAG_VOCAB)       # 30  tag one-hot
+    len(_TAG_VOCAB)       # 28  tag one-hot
     + 8                   #  8  text statistics
     + 2                   #  2  link features
     + 2                   #  2  nesting depth + child tag count

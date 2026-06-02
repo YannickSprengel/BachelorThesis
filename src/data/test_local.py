@@ -1,11 +1,10 @@
 """
-test_pipeline.py
-================
-Quick smoke-test for dripper_lstm_pipeline.py against a local HTML file.
+test_local.py
+=============
+Quick smoke-test for the preprocessing pipeline against a local HTML file.
 
 Usage:
-    python test_pipeline.py                        # uses built-in toy HTML
-    python test_pipeline.py path/to/page.html      # uses your own file
+    python test_local.py path/to/page.html      # uses your own file
 """
 
 import sys
@@ -19,13 +18,37 @@ from preprocess import (
     HTMLExtractionDataset,
     collate_fn,
     FEATURE_DIM,
+    _TAG_VOCAB,          # <- import the vocab so the feature layout can't drift
 )
 from torch.utils.data import DataLoader
+
+# ── derive feature-vector layout from the source of truth ───────────────────────
+# Mirrors the group order in BlockFeatureExtractor.extract():
+#   tags | text(8) | links(2) | dom(2) | position(1) | keywords(2) | flags(4)
+N_TAGS  = len(_TAG_VOCAB)                 # 28, NOT 30
+POS_IDX = N_TAGS + 8 + 2 + 2             # relative-position feature (== 40)
+assert FEATURE_DIM == N_TAGS + 8 + 2 + 2 + 1 + 2 + 4, "feature layout mismatch!"
 
 # ── load HTML ─────────────────────────────────────────────────────────────────
 if len(sys.argv) > 1:
     html = Path(sys.argv[1]).read_text(encoding='utf-8', errors='ignore')
     print(f"Loaded: {sys.argv[1]}")
+else:
+    # built-in toy page (a couple of content blocks + obvious boilerplate)
+    html = """
+    <html><body>
+      <nav class="c-header__nav"><a href="#">Home</a><a href="#">About</a></nav>
+      <article class="c-article-body">
+        <h1 class="c-article-title">A Short Title</h1>
+        <p>This is the first real paragraph of the article. It contains several
+           sentences so that the text-statistics features have something to chew on.</p>
+        <p>Here is a second content paragraph with more words and punctuation.</p>
+      </article>
+      <footer class="c-footer"><a href="#">Privacy</a><a href="#">Terms</a></footer>
+    </body></html>
+    """
+    print("Loaded: built-in toy HTML (pass a path to use your own file)")
+
 preprocessor      = DripperPreprocessor()
 feature_extractor = BlockFeatureExtractor()
 label_generator   = LabelGenerator()
@@ -43,11 +66,11 @@ for block in simplified_blocks:
     print(f"  [{item_id:>3}] <{tag}> class={cls} id={repr(bid):<15}  text: {repr(text)}")
 
 # Step 2: extract features
-print(f"\n── Feature vectors (FEATURE_DIM = {FEATURE_DIM}) ──────────────────────")
+print(f"\n── Feature vectors (FEATURE_DIM = {FEATURE_DIM}, {N_TAGS} tags) ──────────────────────")
 for i, block in enumerate(simplified_blocks):
     vec = feature_extractor.extract(block, i, len(simplified_blocks))
     print(f"  block {i+1}: shape={vec.shape}  min={vec.min():.3f}  max={vec.max():.3f}  "
-          f"tag_onehot_sum={vec[:30].sum():.0f}  rel_pos={vec[42]:.2f}")
+          f"tag_onehot_sum={vec[:N_TAGS].sum():.0f}  rel_pos={vec[POS_IDX]:.2f}")
 
 # Step 3: build dataset (no ground truth → unlabelled mode)
 dataset = HTMLExtractionDataset(preprocessor, feature_extractor, label_generator)
@@ -67,6 +90,5 @@ for feat_batch, lbl_batch, lengths, mask in loader:
     print(f"  lengths    : {lengths.tolist()}")
     print(f"  mask       : {mask.shape}  — {mask.sum().item()} real positions")
 
-print("\n✓ Pipeline working. Ready to plug in your BiLSTM.")
 print(f"  Your model receives:  (batch, seq_len, {FEATURE_DIM})")
 print(f"  Your model outputs:   (batch, seq_len, 2)  → logits per block")
