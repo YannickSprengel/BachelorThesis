@@ -22,7 +22,7 @@ from torch.nn.utils.rnn import pad_sequence
 from bs4 import BeautifulSoup, Tag
 
 
-# Wraps mineru_html's simplify_html to give you two parallel block sequences.
+# Wraps mineru_html's simplify_html to give two parallel block sequences.
 class DripperPreprocessor:
     def __init__(self):
         from mineru_html.process.simplify_html import simplify_html
@@ -109,28 +109,28 @@ FEATURE_DIM = (
 
 class BlockFeatureExtractor:
     """
-    Extracts a fixed-length (FEATURE_DIM = 49) float32 feature vector from a
+    Extracts a fixed-length (FEATURE_DIM = 47) float32 feature vector from a
     single BeautifulSoup block Tag produced by DripperPreprocessor.
 
     Feature groups:
-        [0:30]   – one-hot tag type
-        [30:38]  – text statistics (word count, char count, punct density, ...)
-        [38:40]  – link density, link count
-        [40:42]  – DOM depth, child element count
-        [42]     – relative position in document (0.0 → 1.0)
-        [43:45]  – content keyword score, boilerplate keyword score
-        [45:49]  – binary flags: has_table, has_code, has_img, has_heading
+        [0:28]   – one-hot tag type
+        [28:36]  – text statistics (word count, char count, punct density, ...)
+        [36:38]  – link density, link count
+        [38:40]  – DOM depth, child element count
+        [40]     – relative position in document (0.0 → 1.0)
+        [41:43]  – content keyword score, boilerplate keyword score
+        [43:47]  – binary flags: has_table, has_code, has_img, has_heading
     """
 
     def extract(self, block: Tag, block_idx: int, total_blocks: int) -> np.ndarray:
         features = np.zeros(FEATURE_DIM, dtype=np.float32)
         ptr = 0  # write pointer into the feature vector
 
-        # ── Group 1: Tag type one-hot (30 dims) ──────────────────────────────
+        # ── Group 1: Tag type one-hot (28 dims) ──────────────────────────────
         tag_name = (block.name or 'other').lower()
         tag_idx = _TAG_VOCAB.index(tag_name) if tag_name in _TAG_VOCAB else _TAG_VOCAB.index('other')
         features[ptr + tag_idx] = 1.0
-        ptr += len(_TAG_VOCAB)  # ptr = 30
+        ptr += len(_TAG_VOCAB)  # ptr = 28
 
         # ── Group 2: Text statistics (8 dims) ────────────────────────────────
         text = block.get_text(separator=' ', strip=True)
@@ -146,24 +146,24 @@ class BlockFeatureExtractor:
         features[ptr + 5] = len(re.findall(r'\d', text)) / max(char_count, 1)     # digit density
         features[ptr + 6] = len(re.findall(r'[,;:]', text)) / max(word_count, 1)  # comma/semicol density
         features[ptr + 7] = min(len(re.findall(r'\n', text)) / 10.0, 1.0)         # newline count
-        ptr += 8  # ptr = 38
+        ptr += 8  # ptr = 36
 
         # ── Group 3: Link features (2 dims) ──────────────────────────────────
         anchors = block.find_all('a')
         anchor_text_len = sum(len(a.get_text()) for a in anchors)
         features[ptr + 0] = anchor_text_len / max(char_count, 1)    # link density
         features[ptr + 1] = min(len(anchors) / 10.0, 1.0)           # normalised link count
-        ptr += 2  # ptr = 40
+        ptr += 2  # ptr = 38
 
         # ── Group 4: DOM nesting (2 dims) ─────────────────────────────────────
         all_descendants = block.find_all(True)
         features[ptr + 0] = min(len(all_descendants) / 30.0, 1.0)   # child element count
         features[ptr + 1] = min(self._max_depth(block) / 8.0, 1.0)  # max nesting depth
-        ptr += 2  # ptr = 42
+        ptr += 2  # ptr = 40
 
         # ── Group 5: Document position (1 dim) ────────────────────────────────
         features[ptr] = block_idx / max(total_blocks - 1, 1)         # 0.0 → 1.0
-        ptr += 1  # ptr = 43
+        ptr += 1  # ptr = 41
 
         # ── Group 6: Class / ID keyword scores (2 dims) ────────────────────────
         class_id_str = ' '.join([
@@ -174,14 +174,13 @@ class BlockFeatureExtractor:
         boilerplate_hits = sum(kw in class_id_str for kw in _BOILERPLATE_KW)
         features[ptr + 0] = min(content_hits    / 3.0, 1.0)
         features[ptr + 1] = min(boilerplate_hits / 3.0, 1.0)
-        ptr += 2  # ptr = 45
+        ptr += 2  # ptr = 43
 
-        # ── Group 7: Binary child-tag flags (4 dims) ─────────────────────────
+        #Group 7: Binary child-tag flags (4 dims)
         features[ptr + 0] = 1.0 if block.find('table') else 0.0
         features[ptr + 1] = 1.0 if block.find(['code', 'pre']) else 0.0
         features[ptr + 2] = 1.0 if block.find('img') else 0.0
         features[ptr + 3] = 1.0 if block.find(['h1','h2','h3','h4','h5','h6']) else 0.0
-        # ptr = 49 → FEATURE_DIM
 
         return features
 
@@ -650,124 +649,3 @@ class ContentReconstructor:
 
         # Stage 3b: convert HTML → desired output format
         return self.convert2content(main_html, output_format)
-
-
-# =============================================================================
-# FULL USAGE EXAMPLE
-# =============================================================================
-
-def example_usage():
-    """
-    End-to-end example: load data → build dataset → create DataLoader.
-    Demonstrates what your training script will look like.
-    """
-
-    # ── 1. Build the dataset ──────────────────────────────────────────────
-    print("=" * 60)
-    print("STEP 1: Building dataset from WebMainBench")
-    print("=" * 60)
-
-    # Option A: Load from WebMainBench JSONL (recommended for thesis)
-    # dataset = HTMLExtractionDataset.from_webmainbench(
-    #     "path/to/WebMainBench.jsonl",
-    #     max_docs=1000  # start small for debugging
-    # )
-
-    # Option B: Build manually from raw HTML strings
-    preprocessor      = DripperPreprocessor()
-    feature_extractor = BlockFeatureExtractor()
-    label_generator   = LabelGenerator()
-    dataset = HTMLExtractionDataset(preprocessor, feature_extractor, label_generator)
-
-    # Add a toy example document
-    toy_html = """
-    <html>
-    <body>
-        <nav id="nav-main"><a>Home</a> | <a>About</a> | <a>Contact</a></nav>
-        <div id="ad-banner">Buy our product now!</div>
-        <article class="main-content">
-            <h1>Understanding Neural Networks</h1>
-            <p>Neural networks are computing systems inspired by biological neural networks...</p>
-            <p>The key innovation of deep learning is the use of multiple hidden layers...</p>
-        </article>
-        <aside class="sidebar">Related articles: <a>Article 1</a>, <a>Article 2</a></aside>
-        <footer>Copyright 2024. All rights reserved.</footer>
-    </body>
-    </html>
-    """
-    # Ground truth: the article is main content
-    toy_main_html = """
-    <article class="main-content">
-        <h1>Understanding Neural Networks</h1>
-        <p>Neural networks are computing systems...</p>
-        <p>The key innovation of deep learning...</p>
-    </article>
-    """
-
-    dataset.add_document(
-        raw_html=toy_html,
-        main_html=toy_main_html,
-        label_format='main_html'
-    )
-
-    print(f"\nDataset statistics:")
-    dataset.dataset_statistics()
-
-    # ── 2. Inspect a sample ───────────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("STEP 2: Inspecting a sample")
-    print("=" * 60)
-
-    features, labels = dataset[0]
-    print(f"  features shape : {features.shape}")   # (seq_len, 49)
-    print(f"  labels shape   : {labels.shape}")     # (seq_len,)
-    print(f"  FEATURE_DIM    : {FEATURE_DIM}")
-    print(f"  Labels         : {labels.tolist()}")
-    print(f"  Class balance  : {labels.float().mean():.2f} (fraction content)")
-
-    # ── 3. Normalise features ─────────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("STEP 3: Feature normalisation")
-    print("=" * 60)
-    # In practice: fit on train split only, then transform train/val/test
-    normalizer = FeatureNormalizer()
-    normalizer.fit(dataset)
-    dataset = normalizer.transform(dataset)
-    print("  Features normalised to zero mean / unit variance.")
-
-    # ── 4. Create DataLoader ──────────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("STEP 4: DataLoader")
-    print("=" * 60)
-
-    loader = DataLoader(
-        dataset,
-        batch_size=16,
-        shuffle=True,
-        collate_fn=collate_fn,
-        num_workers=0,          # set to 4 for real training
-    )
-
-    for features_batch, labels_batch, lengths, mask in loader:
-        print(f"  features_batch : {features_batch.shape}")  # (B, max_seq_len, 49)
-        print(f"  labels_batch   : {labels_batch.shape}")    # (B, max_seq_len)
-        print(f"  lengths        : {lengths}")               # (B,) actual seq lens
-        print(f"  mask           : {mask.shape}")            # (B, max_seq_len) bool
-        break
-
-    print("\n" + "=" * 60)
-    print("Pipeline ready! Feed features_batch → your BiLSTM.")
-    print("Your model input:  (batch, seq_len, 49)")
-    print("Your model output: (batch, seq_len, 2)  → logits per block")
-    print("Your loss:         CrossEntropyLoss on output[mask], labels[mask]")
-    print("=" * 60)
-
-    # ── 5. Reconstruction example (after training/inference) ─────────────
-    reconstructor = ContentReconstructor()
-    predicted_labels = labels.tolist()  # pretend these are model predictions
-    clean_text = reconstructor.reconstruct(dataset, 0, predicted_labels, output_format='txt')
-    print(f"\nReconstructed text snippet (first 300 chars):\n{clean_text[:300]}")
-
-
-if __name__ == '__main__':
-    example_usage()
