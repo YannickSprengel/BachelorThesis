@@ -11,7 +11,7 @@ import os, glob, argparse, random
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from biLSTMWithMiniLM import BiLSTMTagger
+from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
 
 
 class CachedDocs(Dataset):
