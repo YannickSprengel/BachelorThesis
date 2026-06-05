@@ -20,10 +20,12 @@ def _parse_blocks(html_str):
     blocks.sort(key=lambda b: int(b.get("_item_id", 0)))
     return blocks
 
+def embed_blocks(blocks):
+    """list of parsed blocks -> (len(blocks), 384) embeddings."""
+    return _model.encode([str(b) for b in blocks])
 
 def embed_document(raw_html):
     """raw HTML -> (seq_len, 384) embedding matrix, one row per simplified block."""
     simplified_html_str, mapping_html_str = simplify_html(raw_html)
     blocks = _parse_blocks(simplified_html_str)
-    texts = [str(b) for b in blocks]
-    return _model.encode(texts)
+    return embed_blocks(blocks)
