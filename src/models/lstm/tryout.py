@@ -12,7 +12,7 @@ extracted content to disk:
 import argparse
 import os
 import torch
-from src.data.miniLmEmbedder import simplify_html, _parse_blocks, embed_blocks
+from src.data.combinedLMEmbedder import simplify_html, _parse_blocks, embed_blocks
 from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
 
 

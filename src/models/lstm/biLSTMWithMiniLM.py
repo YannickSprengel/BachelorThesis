@@ -10,11 +10,11 @@ minilm_embedder.embed_document and predicts ONE sigmoid score per block.
 import torch
 import torch.nn as nn
 
-from src.data.miniLmEmbedder import embed_document, EMB_DIM   # EMB_DIM = 384
+from src.data.combinedLMEmbedder import embed_document, COMBINED_DIM   # EMB_DIM = 431
 
 
 class BiLSTMTagger(nn.Module):
-    def __init__(self, input_dim=EMB_DIM, hidden_dim=128,
+    def __init__(self, input_dim=COMBINED_DIM, hidden_dim=128,
                  num_layers=1, dropout=0.3):
         super().__init__()
         self.lstm = nn.LSTM(
@@ -44,4 +44,4 @@ def predict_document(model, raw_html, threshold=0.5, device="cpu"):
 if __name__ == "__main__":
     model = BiLSTMTagger().to("cpu").eval()
     # preds = predict_document(model, raw_html)
-    print("BiLSTMTagger ready (sigmoid head). input_dim =", EMB_DIM)
+    print("BiLSTMTagger ready (sigmoid head). input_dim =", COMBINED_DIM)
