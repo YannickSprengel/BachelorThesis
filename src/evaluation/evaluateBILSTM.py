@@ -23,7 +23,7 @@ from collections import Counter, defaultdict
 import torch
 import jieba
 
-from src.evaluation.wceb_loader import read_wceb
+from src.evaluation.wcebLoader import read_wceb
 from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
 from src.models.lstm.tryout import extract_main_content
 
