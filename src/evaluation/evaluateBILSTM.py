@@ -65,19 +65,31 @@ def rouge_n_f1(pred, ref, n=5):
 
 @torch.no_grad()
 def predict_page(model, html, device, threshold=0.5):
-
     """One simplify pass -> (body_html, keep mask, per-block text). This call is the 'extraction'."""
     simp_str, map_str = simplify_html(html)
     simpl = _parse_blocks(simp_str)              # what the model sees / is labelled on
     mapping = _parse_blocks(map_str)             # original DOM, used to rebuild content
     emb = torch.as_tensor(embed_blocks(simpl), dtype=torch.float32, device=device).unsqueeze(0)
     keep = (torch.sigmoid(model(emb)).squeeze(0).cpu() > threshold)   # .cpu() forces materialisation
-    body = "\n".join(str(b) for b, k in zip(mapping, keep) if k)
-    block_texts = [b.get_text(" ", strip=True) for b in simpl]
 
-    print(len(simpl), len(mapping))
-    print([b.get("_item_id") for b in simpl][:10])
-    print([b.get("_item_id") for b in mapping][:10])
+    # Reconstruct from the mapping branch, matched by _item_id (NOT positional zip):
+    # the simplified and mapping branches can differ in block count/order, so zipping by
+    # position could apply the keep mask to the wrong DOM nodes and silently rebuild the
+    # wrong text (high block-F1, low ROUGE). Matching on _item_id keeps prediction and
+    # reconstruction aligned to the same block.
+    map_by_id = {b.get("_item_id"): b for b in mapping}
+    kept = [map_by_id[b.get("_item_id")]
+            for b, k in zip(simpl, keep)
+            if k and b.get("_item_id") in map_by_id]
+
+    # Drop nested duplicates: if an ancestor of a kept block is itself kept, str(ancestor)
+    # already contains this block's text. Emitting the child again would double-count it
+    # and hurt ROUGE precision. Keep only the outermost kept blocks.
+    kept_ids = {id(b) for b in kept}
+    top = [b for b in kept if not any(id(a) in kept_ids for a in b.parents)]
+
+    body = "\n".join(str(b) for b in top)
+    block_texts = [b.get_text(" ", strip=True) for b in simpl]        # text basis for silver labels
     return body, keep, block_texts
 
 
