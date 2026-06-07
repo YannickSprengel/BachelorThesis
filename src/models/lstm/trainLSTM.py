@@ -4,7 +4,7 @@ train.py
 Train the BiLSTM on cached (emb, labels). BCEWithLogitsLoss + pos_weight for the
 class imbalance, random train/val split, saves the best model by content-F1.
 
-    python train.py --cache cache/ --epochs 15 --out model.pt
+    python src.models.lstm.train --cache cache/ --epochs 15 --out model.pt
 """
 
 import os, glob, argparse, random

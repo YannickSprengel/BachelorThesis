@@ -15,7 +15,7 @@ Benchmark the trained model on WCEB (Bevendorff et al., 2023), reporting three t
 
 Saves <out>.csv (one row per page, incl. tp/fp/fn and per-page sec) and <out>.json (summary).
 
-    How to run: python -m src.evaluation.evaluate_wceb --model model.pt \
+    How to run: python -m src.evaluation.evaluateBILSTM --model model.pt \
         --wceb src/evaluation/wceb_data/combined --out results/wceb
 
 Requires: jieba, html-text   (plus the training/inference deps)
@@ -65,6 +65,7 @@ def rouge_n_f1(pred, ref, n=5):
 
 @torch.no_grad()
 def predict_page(model, html, device, threshold=0.5):
+
     """One simplify pass -> (body_html, keep mask, per-block text). This call is the 'extraction'."""
     simp_str, map_str = simplify_html(html)
     simpl = _parse_blocks(simp_str)              # what the model sees / is labelled on
@@ -72,7 +73,11 @@ def predict_page(model, html, device, threshold=0.5):
     emb = torch.as_tensor(embed_blocks(simpl), dtype=torch.float32, device=device).unsqueeze(0)
     keep = (torch.sigmoid(model(emb)).squeeze(0).cpu() > threshold)   # .cpu() forces materialisation
     body = "\n".join(str(b) for b, k in zip(mapping, keep) if k)
-    block_texts = [b.get_text(" ", strip=True) for b in simpl]        # text basis for silver labels
+    block_texts = [b.get_text(" ", strip=True) for b in simpl]
+
+    print(len(simpl), len(mapping))
+    print([b.get("_item_id") for b in simpl][:10])
+    print([b.get("_item_id") for b in mapping][:10])
     return body, keep, block_texts
 
 
