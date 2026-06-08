@@ -80,15 +80,13 @@ def predict_page(model, html, device, threshold=0.5):
     return body, keep, block_texts
 
 
-def overlap_labels(block_texts, gt, threshold=0.5):
-    """Silver block label: 1 if >= threshold of a block's tokens appear in the GT text (as in training)."""
+def overlap_labels(block_texts, gt, threshold=0.5, min_words=3):
     gt_tokens = {t.lower() for t in _TOK.findall(gt or "")}
     out = []
     for bt in block_texts:
         toks = [t.lower() for t in _TOK.findall(bt or "")]
-        if not toks:
-            out.append(0)
-            continue
+        if len(toks) < min_words:        # zu kurz -> wie im Training auf 0
+            out.append(0); continue
         frac = sum(1 for t in toks if t in gt_tokens) / len(toks)
         out.append(1 if frac >= threshold else 0)
     return out
