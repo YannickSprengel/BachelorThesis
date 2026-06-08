@@ -3,22 +3,15 @@ evaluate_wceb.py
 ================
 Benchmark the trained model on WCEB (Bevendorff et al., 2023), reporting three things:
 
-  1. ROUGE-N F1 (N=5, jieba), "Html+TEXT" mode (Dripper §5.4):
-        extracted HTML -> plain text -> ROUGE vs ground-truth plaintext      [end-to-end]
+  1. ROUGE-N F1 (N=5, jieba)
   2. Block-level Precision / Recall / F1 of the model's keep/drop decisions   [model only]
-        NOTE: WCEB has no block labels, so the per-block "truth" is a SILVER label derived
-        by token overlap with the ground-truth text (same rule as training). It measures
-        agreement with that heuristic, not human gold -- a proxy, but converter-free.
   3. Extraction throughput: pages/sec + mean/median sec per page, with hardware/device.
-        Only the extraction (simplify + embed + predict + reconstruct) is timed --
+        Only the extraction (simplify + embed + predict + reconstruct) is timed
         file I/O, text conversion and metric computation are excluded.
-
-Saves <out>.csv (one row per page, incl. tp/fp/fn and per-page sec) and <out>.json (summary).
 
     How to run: python -m src.evaluation.evaluateBILSTM --model model.pt \
         --wceb src/evaluation/wceb_data/combined --out results/wceb
 
-Requires: jieba, html-text   (plus the training/inference deps)
 """
 
 import argparse
@@ -72,19 +65,13 @@ def predict_page(model, html, device, threshold=0.5):
     emb = torch.as_tensor(embed_blocks(simpl), dtype=torch.float32, device=device).unsqueeze(0)
     keep = (torch.sigmoid(model(emb)).squeeze(0).cpu() > threshold)   # .cpu() forces materialisation
 
-    # Reconstruct from the mapping branch, matched by _item_id (NOT positional zip):
-    # the simplified and mapping branches can differ in block count/order, so zipping by
-    # position could apply the keep mask to the wrong DOM nodes and silently rebuild the
-    # wrong text (high block-F1, low ROUGE). Matching on _item_id keeps prediction and
-    # reconstruction aligned to the same block.
+    # Reconstruct from the mapping branch, matched by _item_id
     map_by_id = {b.get("_item_id"): b for b in mapping}
     kept = [map_by_id[b.get("_item_id")]
             for b, k in zip(simpl, keep)
             if k and b.get("_item_id") in map_by_id]
 
-    # Drop nested duplicates: if an ancestor of a kept block is itself kept, str(ancestor)
-    # already contains this block's text. Emitting the child again would double-count it
-    # and hurt ROUGE precision. Keep only the outermost kept blocks.
+    # Drop nested duplicates: if an ancestor of a kept block is itself kept
     kept_ids = {id(b) for b in kept}
     top = [b for b in kept if not any(id(a) in kept_ids for a in b.parents)]
 
@@ -120,7 +107,10 @@ def main():
     ap.add_argument("--wceb", required=True, help="path to .../datasets/combined")
     ap.add_argument("--datasets", nargs="*", default=None, help="subset names (default: all)")
     ap.add_argument("--n", type=int, default=5)              # ROUGE-N, paper uses N=5
-    ap.add_argument("--threshold", type=float, default=0.5)  # keep-decision threshold
+    ap.add_argument("--threshold", type=float, default=0.5,
+                    help="model keep-decision threshold (sigmoid cutoff); this is the one to tune")
+    ap.add_argument("--label-threshold", type=float, default=0.5,
+                    help="FIXED overlap cutoff for the silver labels; keep constant when tuning --threshold")
     ap.add_argument("--out", default="wceb_results", help="output basename for .csv and .json")
     args = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -132,6 +122,7 @@ def main():
     model.eval()
     n_params = sum(p.numel() for p in model.parameters())
     print(f"device={device}  hw={hw}  BiLSTM params={n_params:,}")
+    print(f"keep-threshold={args.threshold}  label-threshold(silver)={args.label_threshold}")
     print(f"(ROUGE-{args.n} F1 jieba Html+TEXT  +  block-level P/R/F1  +  throughput)")
 
     out_dir = os.path.dirname(args.out)
@@ -162,7 +153,10 @@ def main():
         s = rouge_n_f1(pred_text, gt, n=args.n)
 
         # block-level: model decision vs silver overlap label
-        gt_lab = overlap_labels(block_texts, gt, args.threshold)
+        # IMPORTANT: the silver labels use a FIXED overlap cutoff (args.label_threshold),
+        # NOT the model keep-threshold. Coupling them would move the ground-truth definition
+        # whenever you tune --threshold, making block-level P/R/F1 uninterpretable.
+        gt_lab = overlap_labels(block_texts, gt, args.label_threshold)
         pred_lab = [int(k) for k in keep]
         tp = sum(p == 1 and g == 1 for p, g in zip(pred_lab, gt_lab))
         fp = sum(p == 1 and g == 0 for p, g in zip(pred_lab, gt_lab))
@@ -185,6 +179,8 @@ def main():
     summary = {
         "model": args.model,
         "device": device, "hardware": hw, "bilstm_params": n_params,
+        "keep_threshold": args.threshold,
+        "label_threshold": args.label_threshold,
         "rouge": {
             "n": args.n,
             "n_docs": len(scores), "n_skipped": skipped,
