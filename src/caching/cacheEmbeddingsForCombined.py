@@ -40,15 +40,9 @@ def block_words(block):
     return tokenize(str(block))
 
 
-# ---------------------------------------------------------------------------
 # Ground-truth vocabulary
-# ---------------------------------------------------------------------------
-
 def cc_select_words(html):
     """Set of words inside all cc-select="true" regions of the original html.
-
-    Returns (word_set, n_nodes). get_text() on a marked node already includes its
-    descendants, so nested marks are covered by the union.
     """
     soup = BeautifulSoup(html, "html.parser")
     nodes = [n for n in soup.find_all(attrs={"cc-select": True})
@@ -60,7 +54,6 @@ def cc_select_words(html):
 
 
 def groundtruth_words(row):
-    """(word_set, source_name). Prefer the cc-select annotation; fall back to text fields."""
     words, n = cc_select_words(row.get("html") or "")
     if n > 0 and words:
         return words, "cc-select"
@@ -91,12 +84,8 @@ def overlap_labels(blocks, gt_words, threshold, min_words):
     return labels
 
 
-# ---------------------------------------------------------------------------
 # Per-document processing
-# ---------------------------------------------------------------------------
-
 def process(row, threshold, min_words):
-    """Returns ((emb, labels), source) or (None, reason)."""
     html = row.get("html")
     if not html:
         return None, "no-html"
@@ -105,12 +94,8 @@ def process(row, threshold, min_words):
     if not gt_words:
         return None, "no-label-source"
 
-    # embed_document takes the RAW html: it runs simplify_html + _parse_blocks
-    # internally and encodes str(block), so tags/structure are kept in the vector.
     emb = np.asarray(embed_document(html), dtype=np.float32)   # (n, 384)
 
-    # Re-derive the SAME blocks (identical _parse_blocks / _item_id order) so we can
-    # attach exactly one label per embedded block.
     simplified_html_str, _mapping = simplify_html(html)
     blocks = _parse_blocks(simplified_html_str)
     if not blocks:
@@ -131,20 +116,6 @@ def iter_jsonl(path):
                 yield json.loads(line)
 
 
-def diagnose_first_row(path):
-    """Print what the first row actually contains, so label problems surface early."""
-    for row in iter_jsonl(path):
-        present = {k: bool(v) for k, v in row.items()}
-        _, n_cc = cc_select_words(row.get("html") or "")
-        print("first row fields (non-empty):",
-              {k: v for k, v in present.items()})
-        print(f"first row cc-select nodes: {n_cc}")
-        if n_cc == 0:
-            print("  WARNING: no cc-select nodes -> will fall back to text fields. "
-                  "Check that a content field is populated.")
-        return
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jsonl", required=True, help="path to webmainbench.jsonl")
@@ -158,7 +129,6 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     print(f"jsonl={args.jsonl}  out={args.out}  threshold={args.threshold}  min_words={args.min_words}")
-    diagnose_first_row(args.jsonl)
 
     kept = skipped = 0
     sources = {}              # how labels were derived, for the summary

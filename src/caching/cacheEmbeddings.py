@@ -38,15 +38,9 @@ def block_words(block):
     return tokenize(str(block))
 
 
-# ---------------------------------------------------------------------------
 # Ground-truth vocabulary
-# ---------------------------------------------------------------------------
-
 def cc_select_words(html):
     """Set of words inside all cc-select="true" regions of the original html.
-
-    Returns (word_set, n_nodes). get_text() on a marked node already includes its
-    descendants, so nested marks are covered by the union.
     """
     soup = BeautifulSoup(html, "html.parser")
     nodes = [n for n in soup.find_all(attrs={"cc-select": True})
@@ -89,12 +83,8 @@ def overlap_labels(blocks, gt_words, threshold, min_words):
     return labels
 
 
-# ---------------------------------------------------------------------------
 # Per-document processing
-# ---------------------------------------------------------------------------
-
 def process(row, threshold, min_words):
-    """Returns ((emb, labels), source) or (None, reason)."""
     html = row.get("html")
     if not html:
         return None, "no-html"
@@ -103,12 +93,8 @@ def process(row, threshold, min_words):
     if not gt_words:
         return None, "no-label-source"
 
-    # embed_document takes the RAW html: it runs simplify_html + _parse_blocks
-    # internally and encodes str(block), so tags/structure are kept in the vector.
     emb = np.asarray(embed_document(html), dtype=np.float32)   # (n, 384)
 
-    # Re-derive the SAME blocks (identical _parse_blocks / _item_id order) so we can
-    # attach exactly one label per embedded block.
     simplified_html_str, _mapping = simplify_html(html)
     blocks = _parse_blocks(simplified_html_str)
     if not blocks:
@@ -130,16 +116,12 @@ def iter_jsonl(path):
 
 
 def diagnose_first_row(path):
-    """Print what the first row actually contains, so label problems surface early."""
     for row in iter_jsonl(path):
         present = {k: bool(v) for k, v in row.items()}
         _, n_cc = cc_select_words(row.get("html") or "")
         print("first row fields (non-empty):",
               {k: v for k, v in present.items()})
         print(f"first row cc-select nodes: {n_cc}")
-        if n_cc == 0:
-            print("  WARNING: no cc-select nodes -> will fall back to text fields. "
-                  "Check that a content field is populated.")
         return
 
 
@@ -159,7 +141,7 @@ def main():
     diagnose_first_row(args.jsonl)
 
     kept = skipped = 0
-    sources = {}              # how labels were derived, for the summary
+    sources = {}
     total_blocks = total_pos = 0
 
     for i, row in enumerate(iter_jsonl(args.jsonl)):
@@ -200,8 +182,6 @@ def main():
     print(f"label sources: {sources}")
     if total_blocks:
         print(f"overall positive block rate: {total_pos / total_blocks:.3f}")
-        if total_pos == 0:
-            print("  WARNING: zero positive labels -> labeling is broken, do NOT train on this.")
 
 
 if __name__ == "__main__":
