@@ -1,14 +1,6 @@
 """
-cache_embeddings.py
-===================
-Read WebMainBench (local JSONL), embed each document's blocks with MiniLM, label
-each block, and cache (emb, labels) per document. Run ONCE. Resumable: skips
-documents already cached.
+run:    python cache_embeddings.py --jsonl data/webmainbench.jsonl --out cache/
 
-    python cache_embeddings.py --jsonl data/webmainbench.jsonl --out cache/
-
-LABELS
-------
 The ground-truth main content in WebMainBench is annotated *inside* the `html`
 field: the human-selected regions carry the attribute  cc-select="true".  That
 attribute is the most reliable label source, because `html` is always present

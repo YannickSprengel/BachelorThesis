@@ -1,6 +1,4 @@
 """
-evaluate_wceb.py
-================
 Benchmark the trained model on WCEB (Bevendorff et al., 2023), reporting three things:
 
   1. ROUGE-N F1 (N=5, jieba)
@@ -86,7 +84,7 @@ def overlap_labels(block_texts, gt, threshold=0.5, min_words=3):
     for bt in block_texts:
         toks = [t.lower() for t in _TOK.findall(bt or "")]
         if len(toks) < min_words:        # zu kurz -> wie im Training auf 0
-            out.append(0); continue
+            out.append(0); continue     
         frac = sum(1 for t in toks if t in gt_tokens) / len(toks)
         out.append(1 if frac >= threshold else 0)
     return out

@@ -3,16 +3,8 @@ Combined per-block representation for the BiLSTM tagger:
 
     block -> MiniLM embedding (384) + hand-engineered features (47)  =  431 dims
 
-The MiniLM half captures the *semantics* of str(block); the 47 hand features
-(reused verbatim from preprocess.BlockFeatureExtractor) capture *structural / positional*
-signals: tag type, text statistics, link density, DOM depth, document position,
-class/id keyword scores, and child-tag flags.
-
 The hand features are already scaled to ~[0,1] in the extractor, and MiniLM values are
 small-magnitude too, so the two halves are concatenated directly (no extra normalisation).
-
-The MiniLM half reuses miniLmEmbedder.embed_blocks, so this architecture uses the
-encoder as the MiniLM-only model
 """
 
 import re
@@ -27,9 +19,6 @@ from src.data.miniLmEmbedder import (
     EMB_DIM,                       # 384
 )
 
-# ---------------------------------------------------------------------------
-# Hand-engineered features  (verbatim from preprocess.BlockFeatureExtractor)
-# ---------------------------------------------------------------------------
 _TAG_VOCAB = [
     'div', 'p', 'span', 'a',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',

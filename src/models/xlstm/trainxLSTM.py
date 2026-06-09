@@ -1,13 +1,14 @@
 """
-Train the BiLSTM on cached (emb, labels)
-run:    python src.models.lstm.train --cache cache/ --epochs 15 --out model.pt
+Train the xLSTM on cached (emb, labels). random train/val split, saves the best model by content-F1.
+
+  run:  python src.models.lstm.train --cache cache/ --epochs 15 --out model.pt
 """
 
 import os, glob, argparse, random
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
+from src.models.xlstm.xLSTMWithMiniLM import XLSTMTagger
 
 
 class CachedDocs(Dataset):
@@ -66,7 +67,7 @@ def main():
     train_loader = DataLoader(CachedDocs(train_files), batch_size=1, shuffle=True)
     val_loader   = DataLoader(CachedDocs(val_files),   batch_size=1)
 
-    model = BiLSTMTagger().to(device)
+    model = XLSTMTagger().to(device)
     pos_w = pos_weight_from(train_files).to(device)
     print("pos_weight =", round(pos_w.item(), 3))
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_w)

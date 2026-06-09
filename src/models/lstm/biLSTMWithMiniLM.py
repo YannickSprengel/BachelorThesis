@@ -1,10 +1,6 @@
 """
-bilstm_tagger.py
-================
 BiLSTM that consumes the (seq_len, 384) MiniLM block embeddings from
 minilm_embedder.embed_document and predicts ONE sigmoid score per block.
-
-    raw HTML --embed_document--> (seq_len, 384) --BiLSTM--> (seq_len,) logit --sigmoid--> P(content)
 """
 
 import torch
@@ -27,7 +23,6 @@ class BiLSTMTagger(nn.Module):
         self.classifier = nn.Linear(hidden_dim * 2, 1)   # *2 bidirectional, 1 logit per block
 
     def forward(self, x):
-        # x: (batch, seq_len, 384) -> logits: (batch, seq_len)   [raw, pre-sigmoid]
         out, _ = self.lstm(x)
         return self.classifier(out).squeeze(-1)
 

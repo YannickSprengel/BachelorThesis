@@ -1,10 +1,6 @@
 """
-test_local.py
-=============
-Quick smoke-test for the preprocessing pipeline against a local HTML file.
-
 Usage:
-    python test_local.py path/to/page.html      # uses your own file
+    python test_local.py path/to/page.html
 """
 
 import sys
@@ -18,23 +14,19 @@ from preprocess import (
     HTMLExtractionDataset,
     collate_fn,
     FEATURE_DIM,
-    _TAG_VOCAB,          # <- import the vocab so the feature layout can't drift
+    _TAG_VOCAB,
 )
 from torch.utils.data import DataLoader
 
-# ── derive feature-vector layout from the source of truth ───────────────────────
-# Mirrors the group order in BlockFeatureExtractor.extract():
-#   tags | text(8) | links(2) | dom(2) | position(1) | keywords(2) | flags(4)
 N_TAGS  = len(_TAG_VOCAB)                 # 28, NOT 30
 POS_IDX = N_TAGS + 8 + 2 + 2             # relative-position feature (== 40)
 assert FEATURE_DIM == N_TAGS + 8 + 2 + 2 + 1 + 2 + 4, "feature layout mismatch!"
 
-# ── load HTML ─────────────────────────────────────────────────────────────────
 if len(sys.argv) > 1:
     html = Path(sys.argv[1]).read_text(encoding='utf-8', errors='ignore')
     print(f"Loaded: {sys.argv[1]}")
 else:
-    # built-in toy page (a couple of content blocks + obvious boilerplate)
+    # built-in toy page
     html = """
     <html><body>
       <nav class="c-header__nav"><a href="#">Home</a><a href="#">About</a></nav>
@@ -72,7 +64,7 @@ for i, block in enumerate(simplified_blocks):
     print(f"  block {i+1}: shape={vec.shape}  min={vec.min():.3f}  max={vec.max():.3f}  "
           f"tag_onehot_sum={vec[:N_TAGS].sum():.0f}  rel_pos={vec[POS_IDX]:.2f}")
 
-# Step 3: build dataset (no ground truth → unlabelled mode)
+# Step 3: build dataset
 dataset = HTMLExtractionDataset(preprocessor, feature_extractor, label_generator)
 dataset.add_document(raw_html=html, label_format='unlabelled')
 

@@ -1,9 +1,3 @@
-"""
-minilm_embedder.py
-==================
-Minimal: simplify_html -> blocks -> all-MiniLM-L6-v2 embeddings (384-dim) -> BiLSTM.
-"""
-
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
 from mineru_html.process.simplify_html import simplify_html

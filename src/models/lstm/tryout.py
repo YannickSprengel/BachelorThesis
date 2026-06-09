@@ -1,12 +1,10 @@
 """
-tryout.py
-=========
 Load a trained model, extract main content from ONE HTML file, and write the FULL
 extracted content to disk:
   - <out>.html : self-contained HTML (reconstructed from the MAPPING branch)
-  - <out>.md   : Markdown (via html2text, the same converter WebMainBench uses) if available
+  - <out>.md   : Markdown via html2text
 
-    python -m src.models.lstm.tryout --model model.pt --html page.html
+ run: python -m src.models.lstm.tryout --model model.pt --html page.html
 """
 
 import argparse
@@ -29,7 +27,6 @@ def extract_main_content(model, html, threshold=0.5, device="cpu"):
 
 
 def to_markdown(body_html):
-    """HTML -> Markdown via html2text (same converter WebMainBench uses for ROUGE)."""
     try:
         import html2text
     except ImportError:

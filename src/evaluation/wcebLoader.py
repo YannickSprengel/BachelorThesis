@@ -1,12 +1,5 @@
 """
-wceb_loader.py
-==============
-Reader for the WCEB 'combined' directory (chatnoir-eu/web-content-extraction-benchmark).
-
-Layout (from the repo's CombinedDatasetReader):
-    combined/html/<dataset>/<page_id>.html        # one raw HTML file per page
-    combined/ground-truth/<dataset>.jsonl         # {"page_id": ..., "plaintext": ..., ...}
-Pages are matched between the two via page_id (a SHA-256 hash).
+Pages are matched between the two via page_id
 """
 import argparse
 import os
@@ -17,9 +10,6 @@ import json
 def read_wceb(combined_dir, datasets=None):
     """
     Yield (dataset, page_id, html, plaintext) for every page in the WCEB combined set.
-
-    :param combined_dir: path to .../datasets/combined
-    :param datasets: optional list of subset names (default: all found)
     """
     truth_dir = os.path.join(combined_dir, "ground-truth")
     html_dir = os.path.join(combined_dir, "html")

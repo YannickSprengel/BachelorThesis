@@ -5,8 +5,6 @@ Pipeline overview:
     3. LabelGenerator        – assigns binary labels (1=content, 0=boilerplate) per block
     4. HTMLExtractionDataset – PyTorch Dataset: one sample = one document
     5. collate_fn            – pads variable-length sequences for batching
-    6. Usage example         – ties everything together
-
 """
 
 import re
@@ -65,10 +63,8 @@ class DripperPreprocessor:
         selected = [str(block) for block, label in zip(mapping_blocks, labels) if label == 1]
         return "\n".join(selected)
 
-# =============================================================================
 # STEP 2 – BLOCK FEATURE EXTRACTOR
 # Converts a single BeautifulSoup block Tag → a fixed-length numpy float32 vector
-# =============================================================================
 
 # All HTML tags we recognise (anything else → 'other' slot)
 _TAG_VOCAB = [
@@ -82,7 +78,6 @@ _TAG_VOCAB = [
     'other'   # catch-all
 ]
 
-# Class/ID keyword features – split into two groups for the feature vector
 _CONTENT_KEYWORDS = [
     'article', 'content', 'main', 'post', 'body', 'text',
     'story', 'blog', 'entry', 'detail', 'description'
@@ -94,7 +89,6 @@ _BOILERPLATE_KW = [
 ]
 
 # FEATURE_DIM is the total number of features per block.
-# Change this only if you add/remove features below.
 FEATURE_DIM = (
     len(_TAG_VOCAB)       # 28  tag one-hot
     + 8                   #  8  text statistics
@@ -104,8 +98,6 @@ FEATURE_DIM = (
     + 2                   #  2  content / boilerplate keyword scores
     + 4                   #  4  binary child-tag flags (table, code, img, heading)
 )
-# → FEATURE_DIM = 49
-
 
 class BlockFeatureExtractor:
     """
@@ -124,7 +116,7 @@ class BlockFeatureExtractor:
 
     def extract(self, block: Tag, block_idx: int, total_blocks: int) -> np.ndarray:
         features = np.zeros(FEATURE_DIM, dtype=np.float32)
-        ptr = 0  # write pointer into the feature vector
+        ptr = 0
 
         # ── Group 1: Tag type one-hot (28 dims) ──────────────────────────────
         tag_name = (block.name or 'other').lower()
@@ -193,11 +185,7 @@ class BlockFeatureExtractor:
         return max(BlockFeatureExtractor._max_depth(c, depth + 1) for c in children)
 
 
-# =============================================================================
-# STEP 3 – LABEL GENERATOR
 # Given a document's blocks and ground-truth annotation, assign binary labels.
-# =============================================================================
-
 class LabelGenerator:
     """
     Assigns a binary label (1=content, 0=boilerplate) to each simplified block.
@@ -215,23 +203,11 @@ class LabelGenerator:
     """
 
     def __init__(self, overlap_threshold: float = 0.5):
-        """
-        Args:
-            overlap_threshold: minimum fraction of a block's words that must
-                               appear in the ground-truth main content text
-                               to label it as content. Only used for format 2.
-        """
         self.overlap_threshold = overlap_threshold
 
     def from_cc_select_attrs(self, simplified_blocks: list[Tag]) -> list[int]:
-        """
-        Format 1 (WebMainBench): ground truth is encoded as cc-select=True
-        attributes inside the blocks themselves (injected before simplification).
-        A block is content (1) if any element in it has cc-select='True'.
-        """
         labels = []
         for block in simplified_blocks:
-            # Check the block itself or any descendant
             selected = (
                 block.get('cc-select') == 'True'
                 or bool(block.find(attrs={'cc-select': 'True'}))
@@ -262,15 +238,9 @@ class LabelGenerator:
             labels.append(1 if overlap >= self.overlap_threshold else 0)
         return labels
 
-# =============================================================================
-# STEP 4 – PYTORCH DATASET
 # One sample = one HTML document. Returns (feature_matrix, label_vector).
-# =============================================================================
-
 class HTMLExtractionDataset(Dataset):
     """
-    PyTorch Dataset for the HTML boilerplate detection task.
-
     Each item is a document represented as:
         features: FloatTensor (seq_len, FEATURE_DIM)  — block feature matrix
         labels:   LongTensor  (seq_len,)               — binary labels per block
@@ -298,13 +268,6 @@ class HTMLExtractionDataset(Dataset):
     def from_webmainbench(cls,
                           jsonl_path: str,
                           max_docs: Optional[int] = None) -> 'HTMLExtractionDataset':
-        """
-        Load from WebMainBench .jsonl format:
-            {"html": "...", "main_html": "...", "convert_main_content": "...", "meta": {...}}
-
-        The html field contains cc-select=True attributes marking ground truth,
-        so we use format-1 labelling (from_cc_select_attrs).
-        """
         ds = cls(DripperPreprocessor(), BlockFeatureExtractor(), LabelGenerator())
         path = Path(jsonl_path)
 
@@ -326,10 +289,6 @@ class HTMLExtractionDataset(Dataset):
     def from_html_directory(cls,
                             html_dir: str,
                             label_format: str = 'main_html') -> 'HTMLExtractionDataset':
-        """
-        Load from a directory of .html files paired with .txt ground-truth files.
-        Useful for CleanEval or custom datasets.
-        """
         ds = cls(DripperPreprocessor(), BlockFeatureExtractor(), LabelGenerator())
         html_dir = Path(html_dir)
 
@@ -349,16 +308,6 @@ class HTMLExtractionDataset(Dataset):
                      main_html: Optional[str] = None,
                      label_format: str = 'cc_select',
                      meta: dict = None):
-        """
-        Process a single HTML document and add it to the dataset.
-
-        Args:
-            raw_html:     raw HTML string of the full web page
-            main_html:    ground-truth main content HTML (needed for 'main_html' format)
-            label_format: 'cc_select'  → use cc-select=True attrs (WebMainBench)
-                          'main_html'  → text-overlap against main_html string
-                          'unlabelled' → no labels (inference only)
-        """
         try:
             simplified_blocks, mapping_blocks = self.preprocessor.process(raw_html)
             # Also store the raw HTML strings for Stage 3 reconstruction via map_to_main
@@ -401,8 +350,6 @@ class HTMLExtractionDataset(Dataset):
             'meta':                meta or {},
         })
 
-    # ── PyTorch Dataset interface ──────────────────────────────────────────
-
     def __len__(self) -> int:
         return len(self._samples)
 
@@ -416,83 +363,28 @@ class HTMLExtractionDataset(Dataset):
         """Return the full sample dict (including mapping_blocks for reconstruction)."""
         return self._samples[idx]
 
-    def dataset_statistics(self) -> dict:
-        """Print basic statistics about the dataset. Useful for debugging."""
-        seq_lens      = [s['seq_len'] for s in self._samples]
-        content_ratio = []
-        for s in self._samples:
-            lbl = s['labels']
-            if len(lbl) > 0:
-                content_ratio.append(lbl.mean() if isinstance(lbl, np.ndarray) else np.mean(lbl))
-
-        stats = {
-            'num_documents':     len(self._samples),
-            'seq_len_mean':      float(np.mean(seq_lens)),
-            'seq_len_median':    float(np.median(seq_lens)),
-            'seq_len_max':       int(np.max(seq_lens)),
-            'seq_len_min':       int(np.min(seq_lens)),
-            'content_ratio_mean': float(np.mean(content_ratio)) if content_ratio else 0.0,
-            'feature_dim':       FEATURE_DIM,
-        }
-        for k, v in stats.items():
-            print(f"  {k:30s}: {v}")
-        return stats
-
-
-# =============================================================================
-# STEP 5 – COLLATE FUNCTION
-# Pads variable-length sequences for batching. Your LSTM receives padded batches.
-# =============================================================================
-
 def collate_fn(batch: list[tuple[torch.Tensor, torch.Tensor]]):
     """
     Pads a batch of variable-length documents to the length of the longest
     document in the batch.
-
-    Returns:
-        features:  FloatTensor  (batch, max_seq_len, FEATURE_DIM)  – padded feature matrices
-        labels:    LongTensor   (batch, max_seq_len)               – padded label sequences (-100 for padding)
-        lengths:   LongTensor   (batch,)                           – actual sequence lengths
-        mask:      BoolTensor   (batch, max_seq_len)               – True for real steps
-
-    Usage in your BiLSTM training loop:
-        for features, labels, lengths, mask in loader:
-            output = model(features, lengths)         # (batch, max_seq_len, 2)
-            loss   = criterion(
-                output[mask],     # only real (non-padded) positions
-                labels[mask]      # only real labels
-            )
     """
     feature_list, label_list = zip(*batch)
 
     lengths = torch.tensor([f.size(0) for f in feature_list], dtype=torch.long)
 
-    # Pad features with zeros, labels with -100 (ignored by CrossEntropyLoss)
     features_padded = pad_sequence(feature_list, batch_first=True, padding_value=0.0)
     labels_padded   = pad_sequence(label_list,   batch_first=True, padding_value=-100)
 
-    # Boolean mask: True where the sequence has real content
     max_len = features_padded.size(1)
     mask = torch.arange(max_len).unsqueeze(0) < lengths.unsqueeze(1)
 
     return features_padded, labels_padded, lengths, mask
 
 
-# =============================================================================
-# STEP 6 – FEATURE NORMALIZER
-# Fit a StandardScaler on the training set, apply to val/test.
-# =============================================================================
-
 class FeatureNormalizer:
     """
     Fits a StandardScaler on training data feature vectors.
     Should be fit only on the training split, then applied to val/test.
-
-    Usage:
-        normalizer = FeatureNormalizer()
-        normalizer.fit(train_dataset)
-        train_dataset = normalizer.transform(train_dataset)
-        val_dataset   = normalizer.transform(val_dataset)
     """
 
     def __init__(self):
@@ -525,21 +417,10 @@ class FeatureNormalizer:
         self._fitted = True
 
 
-# =============================================================================
-# INFERENCE HELPERS
-# After your model predicts labels, reconstruct the clean content.
-# Uses map_to_main and convert2content from mineru_html.process.
-# =============================================================================
-
 def _load_process_fns():
     """
     Load Stage 3 functions from mineru_html.process.
     Returns (map_to_main_fn, convert2content_fn).
-
-    Confirmed import paths (from package structure):
-        mineru_html/process/map_to_main.py
-        mineru_html/process/convert2content.py
-        mineru_html/process/parse_result.py
     """
     try:
         from mineru_html.process.map_to_main import map_to_main
@@ -556,7 +437,6 @@ def _load_process_fns():
 def _fallback_map_to_main(mapping_html: str, labels: dict[str, str]) -> str:
     """
     Fallback: select blocks from mapping_html whose _item_id maps to 'main'.
-    Mirrors what mineru_html.process.map_to_main does.
     """
     soup = BeautifulSoup(mapping_html, 'html.parser')
     blocks = soup.find_all(attrs={'_item_id': True})
@@ -581,14 +461,6 @@ class ContentReconstructor:
     """
     Stage 3 of the Dripper pipeline: applies your LSTM's predicted labels
     back to the Mapping HTML to produce clean extracted content.
-
-    Uses mineru_html.process.map_to_main and convert2content directly,
-    so the output is identical to what Dripper itself would produce.
-
-    The interface between your LSTM and this reconstructor is a dict:
-        {"1": "main", "2": "other", "3": "main", ...}
-    which mirrors exactly what Dripper-0.6B outputs — meaning your LSTM
-    is a drop-in replacement for the LLM in the Dripper pipeline.
     """
 
     def __init__(self):
@@ -597,19 +469,6 @@ class ContentReconstructor:
     def labels_to_dripper_format(self,
                                   simplified_blocks: list[Tag],
                                   predicted_labels: list[int]) -> dict[str, str]:
-        """
-        Convert your LSTM's integer predictions → Dripper's label dict format.
-
-        This is the exact format that map_to_main expects:
-            {"1": "main", "2": "other", "3": "main", ...}
-
-        Args:
-            simplified_blocks: the block Tags (need their _item_id attributes)
-            predicted_labels:  your LSTM's output, one int per block (0 or 1)
-
-        Returns:
-            label_dict: {"item_id_str": "main"/"other", ...}
-        """
         label_dict = {}
         for block, label in zip(simplified_blocks, predicted_labels):
             item_id = block.get('_item_id', '0')
@@ -623,15 +482,6 @@ class ContentReconstructor:
                     output_format: str = 'txt') -> str:
         """
         Full Stage 3: predicted labels → clean extracted content.
-
-        Args:
-            dataset:          HTMLExtractionDataset (holds mapping_blocks + mapping_html)
-            doc_idx:          document index in the dataset
-            predicted_labels: your LSTM's binary predictions per block (0/1)
-            output_format:    'txt', 'md', 'json' — passed to convert2content
-
-        Returns:
-            Extracted content as plain text, markdown, or JSON (per output_format)
         """
         sample = dataset.get_raw_sample(doc_idx)
         mapping_blocks = sample['mapping_blocks']

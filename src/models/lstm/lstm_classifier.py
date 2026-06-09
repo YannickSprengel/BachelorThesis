@@ -5,8 +5,6 @@ Designed to plug directly into the pipeline in preprocess.py:
     - input : (batch, seq_len, FEATURE_DIM)  feature matrices  (FEATURE_DIM = 49)
     - output: (batch, seq_len, 2)            per-block logits (0=boilerplate, 1=content)
 
-It consumes exactly what `collate_fn` produces:
-    features_padded (B, T, 49) | labels_padded (B, T, -100 pad) | lengths (B,) | mask (B, T)
 """
 
 import numpy as np
@@ -14,16 +12,12 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-# FEATURE_DIM from the preprocessing pipeline. Imported there as a constant;
-# hard-coded here so this file is runnable standalone.
-FEATURE_DIM = 49
+FEATURE_DIM = 47
 NUM_CLASSES = 2
 PAD_LABEL = -100  # must match collate_fn's labels padding_value
 
 
-# =============================================================================
 # MODEL
-# =============================================================================
 class BiLSTMBlockTagger(nn.Module):
     def __init__(self,
                  input_dim: int = FEATURE_DIM,
@@ -133,32 +127,15 @@ def evaluate(model, loader, device) -> dict:
     return {"precision": precision, "recall": recall, "f1": f1, "accuracy": accuracy}
 
 
-# =============================================================================
-# USAGE SKETCH
-# =============================================================================
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
     # from preprocess import HTMLExtractionDataset, FeatureNormalizer, collate_fn
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # --- assume you already built train_dataset / val_dataset and normalised them ---
-    # normalizer = FeatureNormalizer(); normalizer.fit(train_dataset)
-    # train_dataset = normalizer.transform(train_dataset)
-    # val_dataset   = normalizer.transform(val_dataset)
-
-    # train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True,  collate_fn=collate_fn)
-    # val_loader   = DataLoader(val_dataset,   batch_size=16, shuffle=False, collate_fn=collate_fn)
 
     model = BiLSTMBlockTagger().to(device)
-    # weights = compute_class_weights(train_dataset).to(device)
-    # criterion = nn.CrossEntropyLoss(weight=weights, ignore_index=PAD_LABEL)
     criterion = nn.CrossEntropyLoss(ignore_index=PAD_LABEL)  # add weight=... in real runs
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
 
-    # for epoch in range(20):
-    #     loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
-    #     metrics = evaluate(model, val_loader, device)
-    #     print(f"epoch {epoch:02d} | loss {loss:.4f} | "
-    #           f"F1(content) {metrics['f1']:.3f} | recall {metrics['recall']:.3f}")
     print("Model built:", model)
