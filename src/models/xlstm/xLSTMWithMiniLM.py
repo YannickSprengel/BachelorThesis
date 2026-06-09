@@ -41,7 +41,7 @@ def _make_mlstm_stack(embedding_dim, num_blocks, num_heads, context_length):
 
 class XLSTMTagger(nn.Module):
     def __init__(self, input_dim=COMBINED_DIM, embedding_dim=144,
-                 num_blocks=2, num_heads=4, context_length=2048,
+                 num_blocks=2, num_heads=4, context_length=4608,
                  bidirectional=True):
         super().__init__()
         assert embedding_dim % num_heads == 0, "embedding_dim must be divisible by num_heads"
