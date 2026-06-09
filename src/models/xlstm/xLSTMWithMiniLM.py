@@ -1,10 +1,8 @@
 """
-  * mLSTM-only (slstm_at=[]). The fast sLSTM CUDA kernel needs Compute Capability >= 8.0;
-    the V100 (7.0) and RTX 6000 (7.5) are below that.
   *  a tagging task benefits from
     right-context, so we run one stack forward and one on the reversed sequence and
     concatenate, mirroring the BiLSTM's inductive bias.
-  * Input/output projection. The block stack works at `embedding_dim`; we project
+  * Input/output projection. The block stack works at `embedding_dim` we project
     431 -> embedding_dim in, and (2*embedding_dim if bidirectional) -> 1 out.
 """
 
@@ -22,17 +20,17 @@ from src.data.combinedLMEmbedder import embed_document, COMBINED_DIM   # COMBINE
 
 
 def _make_mlstm_stack(embedding_dim, num_blocks, num_heads, context_length):
-    """An mLSTM-only block stack (no sLSTM -> no CUDA-kernel / Compute-Capability requirement)."""
+    """An mLSTM-only block stack"""
     cfg = xLSTMBlockStackConfig(
         mlstm_block=mLSTMBlockConfig(
             mlstm=mLSTMLayerConfig(
                 conv1d_kernel_size=4,
                 qkv_proj_blocksize=4,
-                num_heads=num_heads,          # embedding_dim must be divisible by num_heads
+                num_heads=num_heads,
             ),
         ),
         slstm_at=[],                          # <- mLSTM-only
-        context_length=context_length,       # must be >= the longest block sequence you feed
+        context_length=context_length,
         num_blocks=num_blocks,
         embedding_dim=embedding_dim,
     )
@@ -44,7 +42,6 @@ class XLSTMTagger(nn.Module):
                  num_blocks=2, num_heads=4, context_length=4608,
                  bidirectional=True):
         super().__init__()
-        assert embedding_dim % num_heads == 0, "embedding_dim must be divisible by num_heads"
         self.bidirectional = bidirectional
 
         self.in_proj = nn.Linear(input_dim, embedding_dim)
@@ -60,7 +57,6 @@ class XLSTMTagger(nn.Module):
         h = self.in_proj(x)
         f = self.fwd(h)
         if self.bidirectional:
-            # reverse along time, run the second stack, reverse back, concatenate
             b = torch.flip(self.bwd(torch.flip(h, dims=[1])), dims=[1])
             h = torch.cat([f, b], dim=-1)
         else:
