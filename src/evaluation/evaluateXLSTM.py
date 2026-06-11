@@ -7,7 +7,7 @@ Benchmark the trained model on WCEB (Bevendorff et al., 2023), reporting three t
         Only the extraction (simplify + embed + predict + reconstruct) is timed
         file I/O, text conversion and metric computation are excluded.
 
-    How to run: python -m src.evaluation.evaluateBILSTM --model model.pt \
+    How to run: python -m src.evaluation.evaluateXLSTM --model model.pt \
         --wceb src/evaluation/wceb_data/combined --out results/wceb
 
 """
@@ -26,7 +26,7 @@ import jieba
 
 from src.evaluation.wcebLoader import read_wceb
 from src.data.combinedLMEmbedder import simplify_html, _parse_blocks, embed_blocks
-from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
+from src.models.xlstm.xLSTMWithMiniLM import XLSTMTagger
 
 _TOK = re.compile(r"\w+", re.UNICODE)
 
@@ -113,11 +113,11 @@ def main():
     hw = torch.cuda.get_device_name(0) if device == "cuda" \
         else f"{platform.processor() or platform.machine()} x{os.cpu_count()} (CPU)"
 
-    model = BiLSTMTagger().to(device)
+    model = XLSTMTagger().to(device)
     model.load_state_dict(torch.load(args.model, map_location=device))
     model.eval()
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"device={device}  hw={hw}  BiLSTM params={n_params:,}")
+    print(f"device={device}  hw={hw}  xLstm params={n_params:,}")
     print(f"keep-threshold={args.threshold}  label-threshold(silver)={args.label_threshold}")
     print(f"(ROUGE-{args.n} F1 jieba Html+TEXT  +  block-level P/R/F1  +  throughput)")
 
@@ -171,7 +171,7 @@ def main():
     bP, bR, bF = prf(TP, FP, FN)
     summary = {
         "model": args.model,
-        "device": device, "hardware": hw, "bilstm_params": n_params,
+        "device": device, "hardware": hw, "xlstm_param": n_params,
         "keep_threshold": args.threshold,
         "label_threshold": args.label_threshold,
         "rouge": {
