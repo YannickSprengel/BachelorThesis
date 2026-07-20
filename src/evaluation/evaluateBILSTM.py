@@ -1,7 +1,7 @@
 """
 Benchmark the trained model on WCEB (Bevendorff et al., 2023), reporting three things:
 
-  1. ROUGE-N F1 (N=5, jieba)
+  1. ROUGE-5 F1 and ROUGE-L F1 (jieba)
   2. Block-level Precision / Recall / F1 of the model's keep/drop decisions   [model only]
   3. Extraction throughput: pages/sec + mean/median sec per page, with hardware/device.
         Only the extraction (simplify + embed + predict + reconstruct) is timed
@@ -10,91 +10,36 @@ Benchmark the trained model on WCEB (Bevendorff et al., 2023), reporting three t
     How to run: python -m src.evaluation.evaluateBILSTM --model model.pt \
         --wceb src/evaluation/wceb_data/combined --out results/wceb
 
+See src.evaluation.evaluateOracleCeiling for a model-free version of this that
+reconstructs from gold labels instead of model predictions, to check how much of the
+score ceiling comes from preprocessing/reconstruction rather than the tagger.
 """
 
 import argparse
 import csv
 import json
 import os
-import re
 import time
 import platform
 import statistics
-from collections import Counter, defaultdict
+from collections import defaultdict
 import torch
-import jieba
 
 from src.evaluation.wcebLoader import read_wceb
-from src.data.combinedLMEmbedder import simplify_html, _parse_blocks, embed_blocks
+from src.evaluation.textMetrics import rouge_n_f1, rouge_l_f1, to_text
+from src.evaluation.blockReconstruction import parse_page, block_texts, reconstruct, overlap_labels, prf
+from src.data.combinedLMEmbedder import embed_blocks
 from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
-
-_TOK = re.compile(r"\w+", re.UNICODE)
-
-
-def to_text(html):
-    """HTML -> plain text. Uses html-text (what Dripper used for WCEB); falls back to bs4."""
-    try:
-        import html_text
-        return html_text.extract_text(html or "")
-    except ImportError:
-        from bs4 import BeautifulSoup
-        return BeautifulSoup(html or "", "html.parser").get_text(" ", strip=True)
-
-
-def rouge_n_f1(pred, ref, n=5):
-    pt, rt = jieba.lcut(pred or ""), jieba.lcut(ref or "")
-    ng = lambda t: Counter(tuple(t[i:i + n]) for i in range(len(t) - n + 1))
-    pg, rg = ng(pt), ng(rt)
-    if not pg or not rg:
-        return 0.0
-    overlap = sum((pg & rg).values())          # clipped n-gram overlap
-    if overlap == 0:
-        return 0.0
-    prec, rec = overlap / sum(pg.values()), overlap / sum(rg.values())
-    return 2 * prec * rec / (prec + rec)
 
 
 @torch.no_grad()
 def predict_page(model, html, device, threshold=0.5):
     """One simplify pass -> (body_html, keep mask, per-block text). This call is the 'extraction'."""
-    simp_str, map_str = simplify_html(html)
-    simpl = _parse_blocks(simp_str)              # what the model sees / is labelled on
-    mapping = _parse_blocks(map_str)             # original DOM, used to rebuild content
+    simpl, mapping = parse_page(html)
     emb = torch.as_tensor(embed_blocks(simpl), dtype=torch.float32, device=device).unsqueeze(0)
     keep = (torch.sigmoid(model(emb)).squeeze(0).cpu() > threshold)   # .cpu() forces materialisation
-
-    # Reconstruct from the mapping branch, matched by _item_id
-    map_by_id = {b.get("_item_id"): b for b in mapping}
-    kept = [map_by_id[b.get("_item_id")]
-            for b, k in zip(simpl, keep)
-            if k and b.get("_item_id") in map_by_id]
-
-    # Drop nested duplicates: if an ancestor of a kept block is itself kept
-    kept_ids = {id(b) for b in kept}
-    top = [b for b in kept if not any(id(a) in kept_ids for a in b.parents)]
-
-    body = "\n".join(str(b) for b in top)
-    block_texts = [b.get_text(" ", strip=True) for b in simpl]        # text basis for silver labels
-    return body, keep, block_texts
-
-
-def overlap_labels(block_texts, gt, threshold=0.5, min_words=3):
-    gt_tokens = {t.lower() for t in _TOK.findall(gt or "")}
-    out = []
-    for bt in block_texts:
-        toks = [t.lower() for t in _TOK.findall(bt or "")]
-        if len(toks) < min_words:        # zu kurz -> wie im Training auf 0
-            out.append(0); continue     
-        frac = sum(1 for t in toks if t in gt_tokens) / len(toks)
-        out.append(1 if frac >= threshold else 0)
-    return out
-
-
-def prf(tp, fp, fn):
-    p = tp / (tp + fp) if (tp + fp) else 0.0
-    r = tp / (tp + fn) if (tp + fn) else 0.0
-    f = 2 * p * r / (p + r) if (p + r) else 0.0
-    return p, r, f
+    body = reconstruct(simpl, mapping, keep)
+    return body, keep, block_texts(simpl)
 
 
 def main():
@@ -119,7 +64,7 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"device={device}  hw={hw}  BiLSTM params={n_params:,}")
     print(f"keep-threshold={args.threshold}  label-threshold(silver)={args.label_threshold}")
-    print(f"(ROUGE-{args.n} F1 jieba Html+TEXT  +  block-level P/R/F1  +  throughput)")
+    print(f"(ROUGE-{args.n} F1 + ROUGE-L F1, jieba  +  block-level P/R/F1  +  throughput)")
 
     out_dir = os.path.dirname(args.out)
     if out_dir:
@@ -127,10 +72,12 @@ def main():
 
     csv_file = open(args.out + ".csv", "w", newline="", encoding="utf-8")
     writer = csv.writer(csv_file)
-    writer.writerow(["dataset", "page_id", "rouge", "n_blocks", "n_kept",
+    writer.writerow(["dataset", "page_id", "rouge5", "rouge_l", "n_blocks", "n_kept",
                      "pred_chars", "gt_chars", "tp", "fp", "fn", "sec"])
 
-    scores, by_ds, times = [], defaultdict(list), []
+    scores5, scoresL = [], []
+    by_ds5, by_dsL = defaultdict(list), defaultdict(list)
+    times = []
     TP = FP = FN = 0
     ds_blocks = defaultdict(lambda: [0, 0, 0])     # dataset -> [tp, fp, fn]
     skipped = 0
@@ -138,7 +85,7 @@ def main():
     for ds, page_id, html, gt in read_wceb(args.wceb, args.datasets):
         try:
             t0 = time.perf_counter()
-            body, keep, block_texts = predict_page(model, html, device, args.threshold)
+            body, keep, texts = predict_page(model, html, device, args.threshold)
             dt = time.perf_counter() - t0          # extraction time only
             pred_text = to_text(body)              # not timed (eval/metric step)
         except Exception as e:
@@ -146,10 +93,11 @@ def main():
             skipped += 1
             continue
 
-        s = rouge_n_f1(pred_text, gt, n=args.n)
+        s5 = rouge_n_f1(pred_text, gt, n=args.n)
+        sL = rouge_l_f1(pred_text, gt)
 
         # block-level: model decision vs silver overlap label
-        gt_lab = overlap_labels(block_texts, gt, args.label_threshold)
+        gt_lab = overlap_labels(texts, gt, args.label_threshold)
         pred_lab = [int(k) for k in keep]
         tp = sum(p == 1 and g == 1 for p, g in zip(pred_lab, gt_lab))
         fp = sum(p == 1 and g == 0 for p, g in zip(pred_lab, gt_lab))
@@ -157,12 +105,15 @@ def main():
         TP += tp; FP += fp; FN += fn
         ds_blocks[ds][0] += tp; ds_blocks[ds][1] += fp; ds_blocks[ds][2] += fn
 
-        scores.append(s); by_ds[ds].append(s); times.append(dt)
-        writer.writerow([ds, page_id, f"{s:.6f}", len(keep), int(keep.sum()),
+        scores5.append(s5); scoresL.append(sL)
+        by_ds5[ds].append(s5); by_dsL[ds].append(sL)
+        times.append(dt)
+        writer.writerow([ds, page_id, f"{s5:.6f}", f"{sL:.6f}", len(keep), int(keep.sum()),
                          len(pred_text), len(gt), tp, fp, fn, f"{dt:.4f}"])
         csv_file.flush()
-        if len(scores) % 100 == 0:
-            print(f"  {len(scores)} docs  rouge_mean={sum(scores)/len(scores):.4f}  "
+        if len(scores5) % 100 == 0:
+            print(f"  {len(scores5)} docs  rouge5_mean={sum(scores5)/len(scores5):.4f}  "
+                  f"rougeL_mean={sum(scoresL)/len(scoresL):.4f}  "
                   f"sec/page_median={statistics.median(times):.3f}")
 
     csv_file.close()
@@ -174,12 +125,18 @@ def main():
         "device": device, "hardware": hw, "bilstm_params": n_params,
         "keep_threshold": args.threshold,
         "label_threshold": args.label_threshold,
-        "rouge": {
+        "rouge5": {
             "n": args.n,
-            "n_docs": len(scores), "n_skipped": skipped,
-            "overall_f1": round(mean(scores), 6),
-            "by_dataset": {ds: {"n": len(by_ds[ds]), "f1": round(mean(by_ds[ds]), 6)}
-                           for ds in sorted(by_ds)},
+            "n_docs": len(scores5), "n_skipped": skipped,
+            "overall_f1": round(mean(scores5), 6),
+            "by_dataset": {ds: {"n": len(by_ds5[ds]), "f1": round(mean(by_ds5[ds]), 6)}
+                           for ds in sorted(by_ds5)},
+        },
+        "rouge_l": {
+            "n_docs": len(scoresL), "n_skipped": skipped,
+            "overall_f1": round(mean(scoresL), 6),
+            "by_dataset": {ds: {"n": len(by_dsL[ds]), "f1": round(mean(by_dsL[ds]), 6)}
+                           for ds in sorted(by_dsL)},
         },
         "block_level": {
             "note": "silver labels (token overlap with GT text)",
@@ -198,10 +155,12 @@ def main():
     with open(args.out + ".json", "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    print(f"\n=== WCEB ROUGE-{args.n} F1 (Html+TEXT, jieba) ===")
-    print(f"Overall ({len(scores):4d}, skipped {skipped}): {mean(scores):.4f}")
-    for ds in sorted(by_ds):
-        print(f"  {ds:20s} ({len(by_ds[ds]):4d}): {mean(by_ds[ds]):.4f}")
+    print(f"\n=== WCEB ROUGE-{args.n} F1 / ROUGE-L F1 (jieba) ===")
+    print(f"Overall ({len(scores5):4d}, skipped {skipped}): "
+          f"rouge{args.n}={mean(scores5):.4f}  rougeL={mean(scoresL):.4f}")
+    for ds in sorted(by_ds5):
+        print(f"  {ds:20s} ({len(by_ds5[ds]):4d}): "
+              f"rouge{args.n}={mean(by_ds5[ds]):.4f}  rougeL={mean(by_dsL[ds]):.4f}")
 
     print(f"\n=== Block-level (vs silver overlap labels) ===")
     print(f"Precision {bP:.4f}  Recall {bR:.4f}  F1 {bF:.4f}   (tp={TP} fp={FP} fn={FN})")
