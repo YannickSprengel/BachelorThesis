@@ -6,6 +6,7 @@ dependencies = [
     "beautifulsoup4>=4.14.3",
     "datasets>=4.8.5",
     "html2text>=2025.4.15",
+    "jieba>=0.42.1",
     "justext>=3.0.2",
     "lark>=0.12.0",
     "lxml>=6.1.0",
