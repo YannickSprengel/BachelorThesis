@@ -7,8 +7,9 @@ reconstruct the kept content back into HTML the same way.
 import re
 from bs4 import BeautifulSoup
 from mineru_html.process.simplify_html import simplify_html
+from src.evaluation.textMetrics import tokenize
 
-_TOK = re.compile(r"\w+", re.UNICODE)
+_HAS_WORD_CHAR = re.compile(r"\w")
 
 
 def _parse_blocks(html_str):
@@ -48,18 +49,30 @@ def reconstruct(simpl_blocks, mapping_blocks, keep):
     return "\n".join(str(b) for b in top)
 
 
+def _words(text):
+    """Lowercased word tokens, punctuation and whitespace dropped. Uses the same
+    jieba-based tokenizer as the ROUGE metrics so a script without spaces between
+    words (Chinese, Japanese) is split at word granularity instead of \\w+ grabbing
+    a whole punctuation-delimited clause as a single "word"."""
+    return [t.lower() for t in tokenize(text) if _HAS_WORD_CHAR.search(t)]
+
+
 def overlap_labels(texts, gt, threshold=0.5, min_words=3):
     """1 if >= threshold of a block's tokens appear in the ground-truth text, else 0.
-    Same heuristic used to build training labels from WebMainBench's cc-select regions."""
-    gt_tokens = {t.lower() for t in _TOK.findall(gt or "")}
+    Same heuristic used to build training labels from WebMainBench's cc-select regions.
+    A block under min_words needs a full match (all its tokens present) instead of just
+    threshold: a partial match on that few tokens is too easily coincidence, but a full
+    match is trusted even for a one-word block (e.g. a section header like "ARTS ...")."""
+    gt_tokens = set(_words(gt or ""))
     out = []
     for text in texts:
-        toks = [t.lower() for t in _TOK.findall(text or "")]
-        if len(toks) < min_words:
+        toks = _words(text or "")
+        if not toks:
             out.append(0)
             continue
         frac = sum(1 for t in toks if t in gt_tokens) / len(toks)
-        out.append(1 if frac >= threshold else 0)
+        needed = threshold if len(toks) >= min_words else 1.0
+        out.append(1 if frac >= needed else 0)
     return out
 
 

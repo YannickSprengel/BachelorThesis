@@ -71,14 +71,18 @@ def groundtruth_words(row):
 
 
 def overlap_labels(blocks, gt_words, threshold, min_words):
-    """1 if >= threshold of a block's words appear in the ground-truth vocabulary."""
+    """1 if >= threshold of a block's words appear in the ground-truth vocabulary.
+    A block under min_words needs a full match (all its words present) instead of just
+    threshold: a partial match on that few words is too easily coincidence, but a full
+    match is trusted even for a one-word block (e.g. a section header like "ARTS ...")."""
     labels = np.zeros(len(blocks), dtype=np.float32)
     for i, b in enumerate(blocks):
         w = block_words(b)
-        if len(w) < min_words:
+        if not w:
             continue
         frac = sum(t in gt_words for t in w) / len(w)
-        if frac >= threshold:
+        needed = threshold if len(w) >= min_words else 1.0
+        if frac >= needed:
             labels[i] = 1.0
     return labels
 
@@ -132,7 +136,7 @@ def main():
     ap.add_argument("--threshold", type=float, default=0.5,
                     help="min fraction of a block's words that must be in the GT vocab")
     ap.add_argument("--min-words", type=int, default=3,
-                    help="blocks shorter than this are forced to label 0 (reduces noise)")
+                    help="blocks shorter than this need a full word match, not just threshold")
     ap.add_argument("--limit", type=int, default=0, help="process only first N rows (0 = all)")
     args = ap.parse_args()
 
