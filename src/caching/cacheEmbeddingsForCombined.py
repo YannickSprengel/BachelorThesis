@@ -114,10 +114,14 @@ def process(row, threshold, min_words):
 
 def iter_jsonl(path):
     with open(path, encoding="utf-8") as fh:
-        for line in fh:
+        for lineno, line in enumerate(fh, 1):
             line = line.strip()
-            if line:
+            if not line:
+                continue
+            try:
                 yield json.loads(line)
+            except json.JSONDecodeError as e:
+                print(f"[jsonl:{lineno}] skip malformed line: {e}")
 
 
 def main():

@@ -1,0 +1,90 @@
+{
+  "model": "model_combined.pt",
+  "device": "cuda",
+  "hardware": "Quadro RTX 6000",
+  "bilstm_params": 574721,
+  "keep_threshold": 0.3,
+  "label_threshold": 0.5,
+  "rouge": {
+    "n": 5,
+    "n_docs": 3985,
+    "n_skipped": 0,
+    "overall_f1": 0.645316,
+    "by_dataset": {
+      "cetd": {
+        "n": 700,
+        "f1": 0.753942
+      },
+      "cleaneval": {
+        "n": 738,
+        "f1": 0.542232
+      },
+      "cleanportaleval": {
+        "n": 71,
+        "f1": 0.563878
+      },
+      "dragnet": {
+        "n": 1379,
+        "f1": 0.630728
+      },
+      "google-trends-2017": {
+        "n": 180,
+        "f1": 0.566256
+      },
+      "l3s-gn1": {
+        "n": 621,
+        "f1": 0.719556
+      },
+      "readability": {
+        "n": 115,
+        "f1": 0.497813
+      },
+      "scrapinghub": {
+        "n": 181,
+        "f1": 0.706238
+      }
+    }
+  },
+  "block_level": {
+    "note": "silver labels (token overlap with GT text); proxy, not human gold",
+    "precision": 0.8926,
+    "recall": 0.4591,
+    "f1": 0.6064,
+    "tp": 114347,
+    "fp": 13757,
+    "fn": 134696,
+    "by_dataset": {
+      "cetd": {
+        "f1": 0.6324
+      },
+      "cleaneval": {
+        "f1": 0.6853
+      },
+      "cleanportaleval": {
+        "f1": 0.5646
+      },
+      "dragnet": {
+        "f1": 0.5629
+      },
+      "google-trends-2017": {
+        "f1": 0.3823
+      },
+      "l3s-gn1": {
+        "f1": 0.6325
+      },
+      "readability": {
+        "f1": 0.6027
+      },
+      "scrapinghub": {
+        "f1": 0.6226
+      }
+    }
+  },
+  "throughput": {
+    "pages": 3985,
+    "total_extract_sec": 665.87,
+    "pages_per_sec": 5.985,
+    "sec_per_page_mean": 0.1671,
+    "sec_per_page_median": 0.1229
+  }
+}
