@@ -25,8 +25,13 @@ from src.models import trainCommon
 from src.evaluation.evalCommon import run_eval
 from src.models.lstm.trainLSTM import build_model as build_bilstm
 from src.models.xlstm.trainxLSTM import build_model as build_xlstm
+from src.models.gru.trainGRU import build_model as build_gru
+from src.models.transformer.trainTransformer import build_model as build_transformer
 
-ARCH_BUILDERS = {"bilstm": build_bilstm, "xlstm": build_xlstm}
+ARCH_BUILDERS = {
+    "bilstm": build_bilstm, "xlstm": build_xlstm,
+    "gru": build_gru, "transformer": build_transformer,
+}
 WCEB_DATASETS = ["cetd", "cleaneval", "cleanportaleval", "dragnet",
                  "google-trends-2017", "l3s-gn1", "readability", "scrapinghub"]
 
@@ -88,7 +93,8 @@ def main():
         per_fold.append({
             "fold": fold, "val_f1": round(metrics["best_val_f1"], 4),
             "rouge5": summary["rouge5"]["overall_f1"], "rouge_l": summary["rouge_l"]["overall_f1"],
-            "block_f1": summary["block_level"]["f1"], "run_dir": run_dir,
+            "block_f1": summary["block_level"]["f1"], "n_params": summary["n_params"],
+            "pages_per_sec": summary["throughput"]["pages_per_sec"], "run_dir": run_dir,
         })
         print(f"  fold {fold}: rouge5={per_fold[-1]['rouge5']:.4f}  "
               f"rougeL={per_fold[-1]['rouge_l']:.4f}  block_f1={per_fold[-1]['block_f1']:.4f}")

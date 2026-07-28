@@ -26,11 +26,18 @@ from src.models import trainCommon
 from src.evaluation.evalCommon import run_eval
 from src.models.lstm.trainLSTM import build_model as build_bilstm
 from src.models.xlstm.trainxLSTM import build_model as build_xlstm
+from src.models.gru.trainGRU import build_model as build_gru
+from src.models.transformer.trainTransformer import build_model as build_transformer
 
-ARCH_BUILDERS = {"bilstm": build_bilstm, "xlstm": build_xlstm}
+ARCH_BUILDERS = {
+    "bilstm": build_bilstm, "xlstm": build_xlstm,
+    "gru": build_gru, "transformer": build_transformer,
+}
 ARCH_DEFAULTS = {
     "bilstm": {"lr": 1e-3, "clip_grad_norm": None},
     "xlstm": {"lr": 5e-4, "clip_grad_norm": 1.0},
+    "gru": {"lr": 1e-3, "clip_grad_norm": None},
+    "transformer": {"lr": 5e-4, "clip_grad_norm": 1.0},
 }
 
 
@@ -149,8 +156,10 @@ def main():
         row["wceb_rouge_l"] = summary["rouge_l"]["overall_f1"]
         row["wceb_block_f1"] = summary["block_level"]["f1"]
         row["wceb_pages_per_sec"] = summary["throughput"]["pages_per_sec"]
+        row["wceb_n_params"] = summary["n_params"]
         print(f"  {run_dir}: rouge5={row['wceb_rouge5']:.4f}  rougeL={row['wceb_rouge_l']:.4f}  "
-              f"block_f1={row['wceb_block_f1']:.4f}  pages/sec={row['wceb_pages_per_sec']:.2f}")
+              f"block_f1={row['wceb_block_f1']:.4f}  pages/sec={row['wceb_pages_per_sec']:.2f}  "
+              f"n_params={row['wceb_n_params']:,}")
 
     all_keys = sorted({k for row in leaderboard for k in row.keys()})
     summary_csv = os.path.join(args.out, "summary.csv")
