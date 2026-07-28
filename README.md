@@ -67,7 +67,5 @@ All four use the same training loop (`src/models/trainCommon.py`) and the same e
 4. For leave-one-dataset-out cross-validation with WCEB as extra training data, use `src.evaluation.aggregateLODO`.
 5. Compare two runs directly with `src.evaluation.compareArchs`, or pull every result into one table with `src.evaluation.aggregateResults`.
 
-Exact commands and flags are in `CLAUDE.md`.
-
 ## Results
 Every training run writes its own folder under `runs/`. Every evaluation writes a CSV and a JSON file under `results/`. `docs/RESULTS.md` explains what every field in every one of these files means, so you don't have to read the source code to understand a result.
