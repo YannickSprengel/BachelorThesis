@@ -76,6 +76,50 @@ def random_configs(grid, n_samples, seed):
     return [{k: rng.choice(grid[k]) for k in keys} for _ in range(n_samples)]
 
 
+def write_summary(leaderboard, out):
+    """(Re)writes summary.csv/json from the leaderboard. Shared with rebuildSweepSummary.py,
+    which reuses this to finish a sweep run that crashed before its own summary got written."""
+    summary_csv = os.path.join(out, "summary.csv")
+    summary_json = os.path.join(out, "summary.json")
+    all_keys = sorted({k for row in leaderboard for k in row.keys()})
+    with open(summary_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=all_keys)
+        writer.writeheader()
+        for row in leaderboard:
+            writer.writerow(row)
+    with open(summary_json, "w", encoding="utf-8") as f:
+        json.dump(leaderboard, f, indent=2)
+    return summary_csv, summary_json
+
+
+def run_topk_eval(build_model, leaderboard, topk, out, wceb, arch, device):
+    """Loads each topK run's already-trained model.pt and runs the full WCEB eval, filling in
+    the leaderboard rows' wceb_* fields in place and rewriting the summary after each one."""
+    topk_rows = leaderboard[:topk]
+    print(f"\nRunning full WCEB eval on top {len(topk_rows)} configs "
+          f"(the slow part -- summary.csv updates after each one finishes)...", flush=True)
+    for i, row in enumerate(topk_rows):
+        run_dir = row["run_dir"]
+        print(f"\n[topK {i + 1}/{len(topk_rows)}] evaluating {run_dir} on full WCEB...", flush=True)
+        with open(os.path.join(run_dir, "config.json")) as f:
+            config = json.load(f)
+        model = build_model(config).to(device)
+        model.load_state_dict(torch.load(os.path.join(run_dir, "model.pt"), map_location=device))
+        model.eval()
+        summary = run_eval(model, wceb, device=device, model_path=os.path.join(run_dir, "model.pt"),
+                            arch=arch, out_basename=os.path.join(run_dir, "wceb"))
+        row["wceb_rouge5"] = summary["rouge5"]["overall_f1"]
+        row["wceb_rouge_l"] = summary["rouge_l"]["overall_f1"]
+        row["wceb_block_f1"] = summary["block_level"]["f1"]
+        row["wceb_pages_per_sec"] = summary["throughput"]["pages_per_sec"]
+        row["wceb_n_params"] = summary["n_params"]
+        print(f"[topK {i + 1}/{len(topk_rows)}] {run_dir}: rouge5={row['wceb_rouge5']:.4f}  "
+              f"rougeL={row['wceb_rouge_l']:.4f}  block_f1={row['wceb_block_f1']:.4f}  "
+              f"pages/sec={row['wceb_pages_per_sec']:.2f}  n_params={row['wceb_n_params']:,}",
+              flush=True)
+        write_summary(leaderboard, out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arch", required=True, choices=list(ARCH_BUILDERS))
@@ -141,49 +185,14 @@ def main():
     for rank, row in enumerate(leaderboard, 1):
         print(f"{rank:2d}. val_f1={row['val_f1']:.4f}  {row['run_dir']}", flush=True)
 
-    summary_csv = os.path.join(args.out, "summary.csv")
-    summary_json = os.path.join(args.out, "summary.json")
-
-    def write_summary():
-        # Rewritten after every topK config, not just once at the end: the topK stage below
-        # (a full WCEB pass per config) is the slowest part of a sweep and can run for hours
-        # with very little console output, so checking whether this file has grown is a much
-        # more reliable "is this still working" signal than watching a possibly-buffered log.
-        all_keys = sorted({k for row in leaderboard for k in row.keys()})
-        with open(summary_csv, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=all_keys)
-            writer.writeheader()
-            for row in leaderboard:
-                writer.writerow(row)
-        with open(summary_json, "w", encoding="utf-8") as f:
-            json.dump(leaderboard, f, indent=2)
-
-    write_summary()
+    # Rewritten after every topK config, not just once at the end: the topK stage below
+    # (a full WCEB pass per config) is the slowest part of a sweep and can run for hours
+    # with very little console output, so checking whether this file has grown is a much
+    # more reliable "is this still working" signal than watching a possibly-buffered log.
+    summary_csv, summary_json = write_summary(leaderboard, args.out)
     print(f"\nsaved (val-F1 only so far): {summary_csv}  +  {summary_json}", flush=True)
 
-    topk = leaderboard[:args.topk]
-    print(f"\nRunning full WCEB eval on top {len(topk)} configs "
-          f"(the slow part -- {summary_csv} updates after each one finishes)...", flush=True)
-    for i, row in enumerate(topk):
-        run_dir = row["run_dir"]
-        print(f"\n[topK {i + 1}/{len(topk)}] evaluating {run_dir} on full WCEB...", flush=True)
-        with open(os.path.join(run_dir, "config.json")) as f:
-            config = json.load(f)
-        model = build_model(config).to(device)
-        model.load_state_dict(torch.load(os.path.join(run_dir, "model.pt"), map_location=device))
-        model.eval()
-        summary = run_eval(model, args.wceb, device=device, model_path=os.path.join(run_dir, "model.pt"),
-                            arch=args.arch, out_basename=os.path.join(run_dir, "wceb"))
-        row["wceb_rouge5"] = summary["rouge5"]["overall_f1"]
-        row["wceb_rouge_l"] = summary["rouge_l"]["overall_f1"]
-        row["wceb_block_f1"] = summary["block_level"]["f1"]
-        row["wceb_pages_per_sec"] = summary["throughput"]["pages_per_sec"]
-        row["wceb_n_params"] = summary["n_params"]
-        print(f"[topK {i + 1}/{len(topk)}] {run_dir}: rouge5={row['wceb_rouge5']:.4f}  "
-              f"rougeL={row['wceb_rouge_l']:.4f}  block_f1={row['wceb_block_f1']:.4f}  "
-              f"pages/sec={row['wceb_pages_per_sec']:.2f}  n_params={row['wceb_n_params']:,}",
-              flush=True)
-        write_summary()
+    run_topk_eval(build_model, leaderboard, args.topk, args.out, args.wceb, args.arch, device)
 
     print(f"\nsaved: {summary_csv}  +  {summary_json}", flush=True)
 
