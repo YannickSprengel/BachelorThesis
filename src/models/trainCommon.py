@@ -147,7 +147,7 @@ def train(config, model, train_data, val_data, device, run_dir,
         start_epoch = ckpt["epoch"] + 1
         best_f1 = ckpt.get("best_f1", 0.0)
         history = ckpt.get("history", [])
-        print(f"resumed from {resume_path} at epoch {start_epoch}, best_f1={best_f1:.4f}")
+        print(f"resumed from {resume_path} at epoch {start_epoch}, best_f1={best_f1:.4f}", flush=True)
 
     t0 = time.time()
     early_stopped = False
@@ -166,7 +166,7 @@ def train(config, model, train_data, val_data, device, run_dir,
         train_loss = total / max(len(train_loader), 1)
         prec, rec, f1 = evaluate_block_f1(model, val_loader, device, val_threshold)
         print(f"epoch {epoch:02d}  loss {train_loss:.4f}  "
-              f"val  P {prec:.3f}  R {rec:.3f}  F1 {f1:.3f}")
+              f"val  P {prec:.3f}  R {rec:.3f}  F1 {f1:.3f}", flush=True)
         history.append({"epoch": epoch, "train_loss": train_loss,
                          "val_p": prec, "val_r": rec, "val_f1": f1})
 
@@ -174,7 +174,7 @@ def train(config, model, train_data, val_data, device, run_dir,
             best_f1 = f1
             epochs_since_improve = 0
             torch.save(model.state_dict(), model_path)
-            print(f"  -> saved {model_path} (F1={f1:.3f})")
+            print(f"  -> saved {model_path} (F1={f1:.3f})", flush=True)
         else:
             epochs_since_improve += 1
 
@@ -193,11 +193,11 @@ def train(config, model, train_data, val_data, device, run_dir,
 
         if patience > 0 and epochs_since_improve >= patience:
             early_stopped = True
-            print(f"  early stopping at epoch {epoch} (patience={patience})")
+            print(f"  early stopping at epoch {epoch} (patience={patience})", flush=True)
             break
 
     metrics["early_stopped"] = early_stopped
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
-    print("best val F1:", round(best_f1, 4))
+    print("best val F1:", round(best_f1, 4), flush=True)
     return metrics

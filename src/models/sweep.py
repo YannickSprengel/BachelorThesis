@@ -102,7 +102,7 @@ def main():
 
     files = trainCommon.list_cache_files(args.cache, exclude_dataset=args.exclude_dataset)
     train_files, val_files = trainCommon.train_val_split(files, args.val_frac, args.seed)
-    print(f"train={len(train_files)}  val={len(val_files)}  device={device}")
+    print(f"train={len(train_files)}  val={len(val_files)}  device={device}", flush=True)
     train_data = trainCommon.load_cache_to_memory(train_files)
     val_data = trainCommon.load_cache_to_memory(val_files)
 
@@ -110,7 +110,7 @@ def main():
     combos = grid_configs(grid) if args.mode == "grid" else random_configs(grid, args.n_samples, args.seed)
     if args.max_configs:
         combos = combos[:args.max_configs]
-    print(f"sweeping {len(combos)} configs ({args.mode})")
+    print(f"sweeping {len(combos)} configs ({args.mode})", flush=True)
 
     os.makedirs(args.out, exist_ok=True)
     leaderboard = []
@@ -120,7 +120,7 @@ def main():
             "val_frac": args.val_frac, "seed": args.seed, "cache": args.cache,
             "exclude_dataset": args.exclude_dataset,
         }
-        print(f"\n--- config {i + 1}/{len(combos)}: {combo} ---")
+        print(f"\n--- config {i + 1}/{len(combos)}: {combo} ---", flush=True)
         model = build_model(config)
         run_dir = trainCommon.make_run_dir(args.out, args.arch, config)
         metrics = trainCommon.train(
@@ -137,14 +137,36 @@ def main():
         })
 
     leaderboard.sort(key=lambda r: r["val_f1"], reverse=True)
-    print("\n=== Leaderboard (by val F1) ===")
+    print("\n=== Leaderboard (by val F1) ===", flush=True)
     for rank, row in enumerate(leaderboard, 1):
-        print(f"{rank:2d}. val_f1={row['val_f1']:.4f}  {row['run_dir']}")
+        print(f"{rank:2d}. val_f1={row['val_f1']:.4f}  {row['run_dir']}", flush=True)
+
+    summary_csv = os.path.join(args.out, "summary.csv")
+    summary_json = os.path.join(args.out, "summary.json")
+
+    def write_summary():
+        # Rewritten after every topK config, not just once at the end: the topK stage below
+        # (a full WCEB pass per config) is the slowest part of a sweep and can run for hours
+        # with very little console output, so checking whether this file has grown is a much
+        # more reliable "is this still working" signal than watching a possibly-buffered log.
+        all_keys = sorted({k for row in leaderboard for k in row.keys()})
+        with open(summary_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=all_keys)
+            writer.writeheader()
+            for row in leaderboard:
+                writer.writerow(row)
+        with open(summary_json, "w", encoding="utf-8") as f:
+            json.dump(leaderboard, f, indent=2)
+
+    write_summary()
+    print(f"\nsaved (val-F1 only so far): {summary_csv}  +  {summary_json}", flush=True)
 
     topk = leaderboard[:args.topk]
-    print(f"\nRunning full WCEB eval on top {len(topk)} configs...")
-    for row in topk:
+    print(f"\nRunning full WCEB eval on top {len(topk)} configs "
+          f"(the slow part -- {summary_csv} updates after each one finishes)...", flush=True)
+    for i, row in enumerate(topk):
         run_dir = row["run_dir"]
+        print(f"\n[topK {i + 1}/{len(topk)}] evaluating {run_dir} on full WCEB...", flush=True)
         with open(os.path.join(run_dir, "config.json")) as f:
             config = json.load(f)
         model = build_model(config).to(device)
@@ -157,21 +179,13 @@ def main():
         row["wceb_block_f1"] = summary["block_level"]["f1"]
         row["wceb_pages_per_sec"] = summary["throughput"]["pages_per_sec"]
         row["wceb_n_params"] = summary["n_params"]
-        print(f"  {run_dir}: rouge5={row['wceb_rouge5']:.4f}  rougeL={row['wceb_rouge_l']:.4f}  "
-              f"block_f1={row['wceb_block_f1']:.4f}  pages/sec={row['wceb_pages_per_sec']:.2f}  "
-              f"n_params={row['wceb_n_params']:,}")
+        print(f"[topK {i + 1}/{len(topk)}] {run_dir}: rouge5={row['wceb_rouge5']:.4f}  "
+              f"rougeL={row['wceb_rouge_l']:.4f}  block_f1={row['wceb_block_f1']:.4f}  "
+              f"pages/sec={row['wceb_pages_per_sec']:.2f}  n_params={row['wceb_n_params']:,}",
+              flush=True)
+        write_summary()
 
-    all_keys = sorted({k for row in leaderboard for k in row.keys()})
-    summary_csv = os.path.join(args.out, "summary.csv")
-    with open(summary_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=all_keys)
-        writer.writeheader()
-        for row in leaderboard:
-            writer.writerow(row)
-    summary_json = os.path.join(args.out, "summary.json")
-    with open(summary_json, "w", encoding="utf-8") as f:
-        json.dump(leaderboard, f, indent=2)
-    print(f"\nsaved: {summary_csv}  +  {summary_json}")
+    print(f"\nsaved: {summary_csv}  +  {summary_json}", flush=True)
 
 
 if __name__ == "__main__":

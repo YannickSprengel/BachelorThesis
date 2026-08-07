@@ -95,7 +95,7 @@ def run_eval(model, wceb_dir, datasets=None, n=5, threshold=0.5, label_threshold
         if len(scores5) % 100 == 0:
             print(f"  {len(scores5)} docs  rouge5_mean={sum(scores5)/len(scores5):.4f}  "
                   f"rougeL_mean={sum(scoresL)/len(scoresL):.4f}  "
-                  f"sec/page_median={statistics.median(times):.3f}")
+                  f"sec/page_median={statistics.median(times):.3f}", flush=True)
 
     if csv_file:
         csv_file.close()

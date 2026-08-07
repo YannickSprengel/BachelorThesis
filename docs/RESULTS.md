@@ -1,7 +1,6 @@
 # Output reference
 
-Every file this pipeline writes, what's in it, and how to use it while writing the thesis.
-Read this instead of re-reading the source when you've forgotten what a field means.
+Every file this pipeline writes, what's in it.
 
 Pipeline order, for context on how these files relate: cache building -> training (produces
 `runs/<run_dir>/`) -> single-model WCEB evaluation (produces `wceb.csv`/`wceb.json`, used
@@ -18,7 +17,7 @@ Written by `trainCommon.train()`, called from every `train<ARCH>.py`, `sweep.py`
 
 ### `config.json`
 The exact hyperparameter dict used for this run, written once at the start. Fields vary by
-architecture — this is deliberate, each architecture has its own hyperparameter space:
+architecture, each architecture has its own hyperparameter space:
 
 | Field | Present for | Meaning |
 |---|---|---|
@@ -27,10 +26,6 @@ architecture — this is deliberate, each architecture has its own hyperparamete
 | `hidden_dim`, `num_layers`, `dropout` | bilstm, gru | recurrent layer size |
 | `embedding_dim`, `num_blocks`, `num_heads`, `context_length`, `clip_grad_norm` | xlstm | block-stack config; `clip_grad_norm=1.0` is the fix for the NaN-blowup instability documented in `git log` (`b138c2c`) |
 | `d_model`, `nhead`, `num_layers`, `dim_feedforward`, `dropout`, `clip_grad_norm` | transformer | encoder config; same grad-clip rationale as xLSTM |
-
-**Thesis use**: this is your architecture/hyperparameter table source. One row per `run_dir`,
-columns = these fields — don't hand-transcribe hyperparameters from console logs, read them
-from here.
 
 ### `metrics.json`
 Training curve, rewritten after every epoch (so a crash mid-run still leaves the metrics up
@@ -44,13 +39,13 @@ to the last completed epoch).
   "wall_time_sec": 812.4
 }
 ```
-- `history` is one row per epoch — **directly plottable as a training curve** with
+- `history` is one row per epoch, **directly plottable as a training curve** with
   `pandas.DataFrame(json.load(open("metrics.json"))["history"])`, no reshaping needed. Plot
   `val_f1` vs. `epoch` for the classic "did this architecture converge" figure.
 - `val_p`/`val_r`/`val_f1` are **block-level** P/R/F1 on the held-out validation split (not
-  WCEB ROUGE — that only exists in `wceb.json`, see below). This is the cheap proxy metric
+  WCEB ROUGE, that only exists in `wceb.json`, see below). This is the cheap proxy metric
   `sweep.py` ranks configs by, before spending time on a full WCEB pass.
-- `wall_time_sec` is wall-clock for the whole training run — use this for the "training cost"
+- `wall_time_sec` is wall-clock for the whole training run. Use this for the "training cost"
   side of the quality-vs-cost comparison, alongside `wceb.json`'s inference-time throughput.
 
 ### `model.pt`
@@ -154,6 +149,15 @@ Rows are sorted by `val_f1` descending, so row 1..K (whatever `--topk` was) are 
 
 **Thesis use**: this is your hyperparameter-sensitivity table/plot (val_f1 vs. each
 hyperparameter). The `wceb_*` columns on the top rows are what feeds `aggregateResults.py`.
+
+**Checking progress on a running sweep**: `summary.csv` is written as soon as the val-F1
+leaderboard stage finishes (with `wceb_*` columns still blank), then rewritten again after
+*every* top-K config's full WCEB eval, not just once at the very end. The top-K stage is the
+slow part of a sweep, a full 3985-page WCEB pass per config, easily hours for `--topk 5`. If a
+sweep looks stalled, check whether this file exists yet and whether its `wceb_*` columns are
+filling in one row at a time, that's a more reliable progress signal than watching console
+output on a SLURM job (which can sit buffered and invisible for a while even though the run is
+progressing normally).
 
 ---
 

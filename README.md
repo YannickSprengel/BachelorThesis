@@ -39,6 +39,13 @@ python -m src.models.smokeTest
 ```
 It trains one epoch of every architecture on a small sample cache and checks that nothing crashes.
 
+Long-running scripts (`sweep.py`, `aggregateLODO.py`, any training job) already flush their own
+progress prints, so they show up live even when piped to a log file. If you still see a script
+sit quiet for a long time on a SLURM job, run it with `python -u` (or set `PYTHONUNBUFFERED=1`)
+to rule out output buffering before assuming it's stuck. The slowest part of a sweep is the full
+WCEB evaluation on the top-K configs at the end, that alone can take a long time, check whether
+`summary.csv` in the sweep's output folder is growing before assuming something is wrong.
+
 ## Data
 Training data comes from WebMainBench, a large collection of pages where the main content is already marked. Most pages are English, a smaller part is Chinese or Japanese.
 
