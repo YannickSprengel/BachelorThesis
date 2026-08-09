@@ -32,6 +32,7 @@ def build_model(config):
         hidden_dim=config.get("hidden_dim", 128),
         num_layers=config.get("num_layers", 1),
         dropout=config.get("dropout", 0.3),
+        minilm_chunk_size=config.get("minilm_chunk_size"),
     )
 
 
@@ -54,6 +55,9 @@ def main():
     ap.add_argument("--min-delta", type=float, default=0.0)
     ap.add_argument("--clip-grad-norm", type=float, default=1.0,
                      help="finetuning MiniLM end-to-end can be unstable, unlike the small taggers; clip by default")
+    ap.add_argument("--minilm-chunk-size", type=int, default=None,
+                     help="blocks per MiniLM forward call within a page (default: TrainableMiniLMEmbedder's "
+                          "own default, 16); lower this if you still hit CUDA OOM on pages with many blocks")
     ap.add_argument("--resume", default=None, help="path to a checkpoint.pt to resume from")
     ap.add_argument("--run-dir", default=None, help="default: auto-generated under runs/")
     args = ap.parse_args()
@@ -70,7 +74,7 @@ def main():
         "arch": "trainable_minilm_bilstm", "hidden_dim": args.hidden_dim, "num_layers": args.num_layers,
         "dropout": args.dropout, "lr": args.lr, "epochs": args.epochs, "val_frac": args.val_frac,
         "seed": args.seed, "jsonl": args.jsonl, "threshold": args.threshold, "min_words": args.min_words,
-        "clip_grad_norm": args.clip_grad_norm,
+        "clip_grad_norm": args.clip_grad_norm, "minilm_chunk_size": args.minilm_chunk_size,
     }
     model = build_model(config)
 
