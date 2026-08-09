@@ -17,9 +17,10 @@ from src.models.lstm.biLSTMWithMiniLM import BiLSTMTagger
 
 
 class TrainableMiniLMBiLSTM(nn.Module):
-    def __init__(self, hidden_dim=128, num_layers=1, dropout=0.3):
+    def __init__(self, hidden_dim=128, num_layers=1, dropout=0.3, minilm_chunk_size=None):
         super().__init__()
-        self.embedder = TrainableMiniLMEmbedder()
+        kwargs = {"chunk_size": minilm_chunk_size} if minilm_chunk_size else {}
+        self.embedder = TrainableMiniLMEmbedder(**kwargs)
         self.tagger = BiLSTMTagger(hidden_dim=hidden_dim, num_layers=num_layers, dropout=dropout)
 
     def forward(self, blocks):
