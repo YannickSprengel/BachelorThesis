@@ -16,6 +16,14 @@ The 47-dim hand-engineered structural features (src.data.combinedLMEmbedder.hand
 stay exactly as they are: non-differentiable, computed from the raw BeautifulSoup Tag, and
 concatenated onto the now-trainable 384-dim MiniLM output -- same 431-dim COMBINED_DIM shape
 every tagger already expects, so nothing downstream needs to change.
+
+Gradient checkpointing is enabled on auto_model: this module puts every block of a page through
+the full 12-layer BertModel in one batch (see forward()), and backprop needs every layer's
+activations for every block held in memory at once unless they're recomputed instead. On a
+~22GB GPU that's enough to OOM on ordinary WebMainBench pages once they have more than a couple
+hundred blocks. Checkpointing trades some recompute time in the backward pass for not storing
+those activations. It only kicks in while self.training is True (HF checks this internally), so
+eval/inference (already @torch.no_grad() in predict_page) is unaffected.
 """
 
 import torch
@@ -35,6 +43,7 @@ class TrainableMiniLMEmbedder(nn.Module):
         self.auto_model = st_model[0].auto_model      # HF BertModel, a real nn.Module submodule
         self.tokenizer = st_model[0].tokenizer
         self.max_length = max_length
+        self.auto_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
 
     def forward(self, blocks):
         """blocks: list of parsed bs4.Tag (one page), same input combinedLMEmbedder.embed_blocks
