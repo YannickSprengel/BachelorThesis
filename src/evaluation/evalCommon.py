@@ -22,10 +22,14 @@ from src.data.combinedLMEmbedder import embed_blocks
 
 
 @torch.no_grad()
-def predict_page(model, html, device, threshold=0.5):
-    """One simplify pass -> (body_html, keep mask, per-block text). This call is the 'extraction'."""
+def predict_page(model, html, device, threshold=0.5, embed_fn=embed_blocks):
+    """One simplify pass -> (body_html, keep mask, per-block text). This call is the 'extraction'.
+
+    embed_fn defaults to the frozen combinedLMEmbedder.embed_blocks used by every cache-trained
+    architecture. The trainable-MiniLM path passes its own fine-tuned embedder instead, so the
+    weights actually used for eval match the ones the tagger was trained against."""
     simpl, mapping = parse_page(html)
-    emb = torch.as_tensor(embed_blocks(simpl), dtype=torch.float32, device=device).unsqueeze(0)
+    emb = torch.as_tensor(embed_fn(simpl), dtype=torch.float32, device=device).unsqueeze(0)
     keep = (torch.sigmoid(model(emb)).squeeze(0).cpu() > threshold)   # .cpu() forces materialisation
     body = reconstruct(simpl, mapping, keep)
     return body, keep, block_texts(simpl)
@@ -37,12 +41,19 @@ def _hardware_label(device):
 
 
 def run_eval(model, wceb_dir, datasets=None, n=5, threshold=0.5, label_threshold=0.5,
-             device="cpu", model_path=None, arch=None, out_basename=None):
+             device="cpu", model_path=None, arch=None, out_basename=None, embed_fn=embed_blocks,
+             n_params=None):
     """Runs the simplify->embed->predict->reconstruct pipeline over WCEB, scoring ROUGE-5/L
     against ground truth and block-level P/R/F1 against silver overlap labels, plus throughput.
     If out_basename is given, also writes <out_basename>.csv / .json exactly as evaluate*.py do.
-    Returns the summary dict either way."""
-    n_params = sum(p.numel() for p in model.parameters())
+    Returns the summary dict either way.
+
+    n_params defaults to counting `model`'s own parameters, which is right when `model` is the
+    whole thing doing the forward pass. The trainable-MiniLM path passes only its tagger half as
+    `model` (embed_fn handles the embedder half separately), so it passes n_params explicitly to
+    still report the true combined size."""
+    if n_params is None:
+        n_params = sum(p.numel() for p in model.parameters())
     hw = _hardware_label(device)
 
     writer = csv_file = None
@@ -66,7 +77,7 @@ def run_eval(model, wceb_dir, datasets=None, n=5, threshold=0.5, label_threshold
     for ds, page_id, html, gt in read_wceb(wceb_dir, datasets):
         try:
             t0 = _time.perf_counter()
-            body, keep, texts = predict_page(model, html, device, threshold)
+            body, keep, texts = predict_page(model, html, device, threshold, embed_fn=embed_fn)
             dt = _time.perf_counter() - t0
             pred_text = to_text(body)
         except Exception as e:

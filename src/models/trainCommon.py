@@ -72,7 +72,9 @@ def evaluate_block_f1(model, loader, device, threshold=0.5):
     model.eval()
     tp = fp = fn = 0
     for emb, y in loader:
-        emb = emb.to(device)
+        # emb is a raw block list (not a tensor) for the trainable-MiniLM path; the embedder
+        # inside that model reads its own device from its parameters instead.
+        emb = emb.to(device) if torch.is_tensor(emb) else emb
         pred = torch.sigmoid(model(emb)).squeeze(0).cpu() > threshold
         y = y.squeeze(0).bool()
         tp += int((pred & y).sum()); fp += int((pred & ~y).sum()); fn += int((~pred & y).sum())
@@ -111,13 +113,20 @@ def load_checkpoint(path, model, optimizer=None, device="cpu"):
 
 def train(config, model, train_data, val_data, device, run_dir,
           epochs=15, lr=1e-3, patience=0, min_delta=0.0,
-          clip_grad_norm=None, resume_path=None, val_threshold=0.5):
+          clip_grad_norm=None, resume_path=None, val_threshold=0.5, collate_fn=None):
     """Core training loop, architecture-agnostic (model is already constructed).
 
     Writes run_dir/config.json (once), run_dir/model.pt (best state_dict, on val-F1
     improvement), run_dir/checkpoint.pt (full resume state, every epoch), and
     run_dir/metrics.json (per-epoch history + summary, every epoch). Returns the
     final metrics dict (same content as metrics.json).
+
+    collate_fn defaults to None (torch's default, stacking tensors) for the cache-based
+    architectures. The trainable-MiniLM path passes its own collate_fn instead, since its
+    dataset yields (list[bs4.Tag], label_tensor) pairs where torch's default collate can't
+    stack the block list -- it unwraps the block list as-is (batch_size is always 1 in this
+    repo) but still adds the leading batch dim to the label tensor by hand, to match the
+    dim torch's default collate would have added for a plain tensor.
     """
     os.makedirs(run_dir, exist_ok=True)
     config_path = os.path.join(run_dir, "config.json")
@@ -126,8 +135,8 @@ def train(config, model, train_data, val_data, device, run_dir,
             json.dump(config, f, indent=2)
 
     model = model.to(device)
-    train_loader = DataLoader(InMemoryDocs(train_data), batch_size=1, shuffle=True)
-    val_loader = DataLoader(InMemoryDocs(val_data), batch_size=1)
+    train_loader = DataLoader(InMemoryDocs(train_data), batch_size=1, shuffle=True, collate_fn=collate_fn)
+    val_loader = DataLoader(InMemoryDocs(val_data), batch_size=1, collate_fn=collate_fn)
 
     pos_w = pos_weight_from(train_data).to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
@@ -155,7 +164,8 @@ def train(config, model, train_data, val_data, device, run_dir,
         model.train()
         total = 0.0
         for emb, y in train_loader:
-            emb, y = emb.to(device), y.to(device)
+            emb = emb.to(device) if torch.is_tensor(emb) else emb
+            y = y.to(device)
             optimizer.zero_grad()
             loss = criterion(model(emb), y)
             loss.backward()
