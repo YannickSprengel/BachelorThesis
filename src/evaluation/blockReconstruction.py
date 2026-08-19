@@ -5,9 +5,10 @@ reconstruct the kept content back into HTML the same way.
 """
 
 import re
+from collections import Counter
 from bs4 import BeautifulSoup
 from mineru_html.process.simplify_html import simplify_html
-from src.evaluation.textMetrics import tokenize
+from src.evaluation.textMetrics import tokenize, _lcs_with_endpoint
 
 _HAS_WORD_CHAR = re.compile(r"\w")
 
@@ -73,6 +74,102 @@ def overlap_labels(texts, gt, threshold=0.5, min_words=3):
         frac = sum(1 for t in toks if t in gt_tokens) / len(toks)
         needed = threshold if len(toks) >= min_words else 1.0
         out.append(1 if frac >= needed else 0)
+    return out
+
+
+def overlap_labels_weighted(texts, gt, threshold=0.5, min_words=3):
+    """Frequency-aware variant of overlap_labels: gt_tokens is a Counter, not a set, and
+    a block's matched count is clipped multiset overlap (same Counter & Counter clipping
+    rouge_n_f1 itself uses), not set membership. A block that repeats one rare gt word
+    many times (e.g. a nav teaser reusing the headline) no longer gets free credit for
+    every repetition -- each occurrence in gt can only be matched once."""
+    gt_counts = Counter(_words(gt or ""))
+    out = []
+    for text in texts:
+        toks = _words(text or "")
+        if not toks:
+            out.append(0)
+            continue
+        matched = sum((Counter(toks) & gt_counts).values())
+        frac = matched / len(toks)
+        needed = threshold if len(toks) >= min_words else 1.0
+        out.append(1 if frac >= needed else 0)
+    return out
+
+
+def overlap_labels_sequential(texts, gt, threshold=0.5, min_words=3):
+    """Position-aware variant of overlap_labels: instead of checking whether a block's
+    words appear ANYWHERE in gt (order/frequency-blind, see overlap_labels), search for
+    the block's best alignment in a forward-moving window of gt starting where the
+    previous ACCEPTED block's match left off. Blocks are already in document order
+    (parse_page sorts by _item_id), and genuine content preserves that order in gt too
+    -- validated empirically across all 8 WCEB sub-datasets, see
+    analysis/oracle_investigation.md Part 5. A rejected block leaves the cursor where it
+    was, so the next block still searches from the same point.
+
+    A widened-window retry was tried and dropped during development: it let a
+    low-quality near-miss (e.g. an author byline that isn't really present in gt)
+    accept via a spurious, widely-scattered match far ahead in the token stream,
+    over-advancing the cursor and stranding a genuine later block behind it (a real,
+    observed regression, not a hypothetical one -- see analysis/oracle_investigation.md
+    Part 5). The SPAN_GUARD_MULT check below is therefore an accept/reject gate, not
+    just an advance-amount decision: a match whose span is disproportionate to the
+    block's own length is weak evidence and gets rejected outright, on the theory that
+    a genuine positional match should be reasonably tight, not just technically present
+    somewhere in a wide window.
+
+    Tuning constants below (window floor/multiplier/cap, span-guard multiplier) are
+    internal, not exposed via the shared (texts, gt, threshold, min_words) labeler
+    signature every overlap_labels* variant uses -- see the analysis doc for how they
+    were chosen and what each guards against.
+    """
+    WINDOW_FLOOR = 100
+    WINDOW_MULT = 6
+    WINDOW_CAP = 1000
+    SPAN_GUARD_MULT = 3
+
+    gt_tokens = _words(gt or "")
+    cursor = 0
+    out = []
+    for text in texts:
+        toks = _words(text or "")
+        if not toks:
+            out.append(0)
+            continue
+
+        is_short = len(toks) < min_words
+        needed = 1.0 if is_short else threshold
+        remaining = max(0, len(gt_tokens) - cursor)
+        if is_short:
+            # no floor for short blocks -- a 100-token floor would make a 3-word
+            # block's "local" window basically global again, reintroducing the exact
+            # coincidental-match risk this whole approach is meant to avoid.
+            size = min(remaining, WINDOW_MULT * len(toks))
+        else:
+            size = min(remaining, max(WINDOW_FLOOR, WINDOW_MULT * len(toks)), WINDOW_CAP)
+
+        window = gt_tokens[cursor: cursor + size]
+        length, first, last = _lcs_with_endpoint(toks, window)
+        frac = length / len(toks)
+        span = (last - first + 1) if last is not None else 0
+        loose = span > SPAN_GUARD_MULT * len(toks)
+
+        if is_short:
+            # near-contiguity required, not just "matched somewhere in the window" --
+            # a short phrase spread thinly across a wide span is weak evidence even at
+            # 100% token coverage (e.g. "Best of Toronto" against a 2500-token article
+            # that happens to use "Toronto" once, far from "Best"/"of").
+            accept = frac >= needed and span <= len(toks) + 2
+        else:
+            accept = frac >= needed and not loose
+
+        if accept:
+            out.append(1)
+            cursor += last + 1
+        else:
+            out.append(0)
+            # cursor intentionally left unchanged: a wrongly-rejected block becomes an
+            # isolated false negative, it doesn't corrupt later blocks' own searches.
     return out
 
 

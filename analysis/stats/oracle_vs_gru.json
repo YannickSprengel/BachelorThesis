@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": -0.00552964190715182,
+    "ci_lo": -0.008312320100376412,
+    "ci_hi": -0.0025980739585947303,
+    "frac_resamples_positive": 0.0003
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": -0.013266921428571431,
+      "ci_lo": -0.01571797853571429,
+      "ci_hi": -0.010784413750000001,
+      "frac_resamples_positive": 0.0
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": 0.016474589430894308,
+      "ci_lo": 0.01016347967479675,
+      "ci_hi": 0.023866297899728994,
+      "frac_resamples_positive": 1.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.022874140845070424,
+      "ci_lo": -0.01599270457746479,
+      "ci_hi": 0.07384264964788731,
+      "frac_resamples_positive": 0.8334
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": -0.01956924655547498,
+      "ci_lo": -0.024451607849891224,
+      "ci_hi": -0.014616929369108052,
+      "frac_resamples_positive": 0.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.030201722222222217,
+      "ci_lo": 0.0075281420833333305,
+      "ci_hi": 0.05599393736111113,
+      "frac_resamples_positive": 0.9966
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": -0.00621474879227053,
+      "ci_lo": -0.012533998510466986,
+      "ci_hi": 0.000984774798711756,
+      "frac_resamples_positive": 0.0431
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": -0.0025455826086956497,
+      "ci_lo": -0.01284544304347826,
+      "ci_hi": 0.00884123652173913,
+      "frac_resamples_positive": 0.305
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": -0.004581806629834255,
+      "ci_lo": -0.013192735773480659,
+      "ci_hi": 0.004915009530386738,
+      "frac_resamples_positive": 0.1632
+    }
+  },
+  "label_a": "oracle",
+  "label_b": "gru",
+  "path_a": "results/oracle/wceb.csv",
+  "path_b": "results_from_server/runs/sweep_gru/20260728-150826_gru_c12a355b/wceb.csv"
+}

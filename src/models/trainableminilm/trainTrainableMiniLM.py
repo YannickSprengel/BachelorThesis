@@ -60,13 +60,17 @@ def main():
                           "own default, 16); lower this if you still hit CUDA OOM on pages with many blocks")
     ap.add_argument("--resume", default=None, help="path to a checkpoint.pt to resume from")
     ap.add_argument("--run-dir", default=None, help="default: auto-generated under runs/")
+    ap.add_argument("--labeler", choices=["overlap", "dom"], default="overlap",
+                     help="overlap: word-overlap heuristic (default, unchanged legacy behavior). "
+                          "dom: direct cc-select attribute read, see analysis/oracle_investigation.md")
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"device={device}", flush=True)
 
     data = load_webmainbench_blocks(args.jsonl, threshold=args.threshold,
-                                     min_words=args.min_words, limit=args.limit)
+                                     min_words=args.min_words, limit=args.limit,
+                                     labeler=args.labeler)
     train_data, val_data = trainCommon.train_val_split(data, args.val_frac, args.seed)
     print(f"train={len(train_data)}  val={len(val_data)}", flush=True)
 

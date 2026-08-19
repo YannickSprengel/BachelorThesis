@@ -20,15 +20,24 @@ from collections import defaultdict
 
 from src.evaluation.wcebLoader import read_wceb
 from src.evaluation.textMetrics import rouge_n_f1, rouge_l_f1, to_text
-from src.evaluation.blockReconstruction import parse_page, block_texts, reconstruct, overlap_labels
+from src.evaluation.blockReconstruction import (
+    parse_page, block_texts, reconstruct, overlap_labels, overlap_labels_weighted,
+    overlap_labels_sequential,
+)
+
+LABELERS = {
+    "overlap": overlap_labels,
+    "overlap_weighted": overlap_labels_weighted,
+    "overlap_sequential": overlap_labels_sequential,
+}
 
 
-def oracle_page(html, gt, threshold, min_words):
+def oracle_page(html, gt, threshold, min_words, labeler=overlap_labels):
     """Same shape as evaluate*.py's predict_page, but the keep mask comes directly
     from the gold overlap labels instead of a model."""
     simpl, mapping = parse_page(html)
     texts = block_texts(simpl)
-    keep = overlap_labels(texts, gt, threshold, min_words)
+    keep = labeler(texts, gt, threshold, min_words)
     body = reconstruct(simpl, mapping, keep)
     return body, keep
 
@@ -41,8 +50,12 @@ def main():
     ap.add_argument("--threshold", type=float, default=0.5,
                     help="token-overlap cutoff used to build the oracle's keep/drop labels")
     ap.add_argument("--min-words", type=int, default=3)
+    ap.add_argument("--labeler", choices=list(LABELERS), default="overlap",
+                    help="overlap: set-membership token overlap (default). overlap_weighted: "
+                         "frequency-aware clipped-multiset overlap, see blockReconstruction.py")
     ap.add_argument("--out", default="oracle_results", help="output basename for .csv and .json")
     args = ap.parse_args()
+    labeler = LABELERS[args.labeler]
 
     out_dir = os.path.dirname(args.out)
     if out_dir:
@@ -60,7 +73,7 @@ def main():
 
     for ds, page_id, html, gt in read_wceb(args.wceb, args.datasets):
         try:
-            body, keep = oracle_page(html, gt, args.threshold, args.min_words)
+            body, keep = oracle_page(html, gt, args.threshold, args.min_words, labeler)
             pred_text = to_text(body)
         except Exception as e:
             print(f"[{ds}/{page_id[:8]}] skip: {e}")
@@ -82,6 +95,7 @@ def main():
 
     summary = {
         "keep_source": "oracle (gold token-overlap labels, no model)",
+        "labeler": args.labeler,
         "label_threshold": args.threshold,
         "rouge5": {
             "n": args.n, "n_docs": len(scores5), "n_skipped": skipped,

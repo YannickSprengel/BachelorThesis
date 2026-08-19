@@ -31,18 +31,22 @@ import argparse
 import numpy as np
 
 from src.evaluation.wcebLoader import read_wceb
-from src.evaluation.blockReconstruction import parse_page, block_texts, overlap_labels
+from src.evaluation.blockReconstruction import (
+    parse_page, block_texts, overlap_labels, overlap_labels_sequential,
+)
 from src.data.combinedLMEmbedder import embed_blocks
 
+LABELERS = {"overlap": overlap_labels, "overlap_sequential": overlap_labels_sequential}
 
-def process(html, gt_text, threshold, min_words):
+
+def process(html, gt_text, threshold, min_words, labeler_name="overlap"):
     simpl_blocks, _mapping_blocks = parse_page(html)
     if not simpl_blocks:
         return None, "no-blocks"
     texts = block_texts(simpl_blocks)
-    labels = overlap_labels(texts, gt_text, threshold, min_words)
+    labels = LABELERS[labeler_name](texts, gt_text, threshold, min_words)
     emb = np.asarray(embed_blocks(simpl_blocks), dtype=np.float32)
-    return (emb, np.asarray(labels, dtype=np.float32)), "wceb-overlap"
+    return (emb, np.asarray(labels, dtype=np.float32)), f"wceb-{labeler_name}"
 
 
 def main():
@@ -50,6 +54,12 @@ def main():
     ap.add_argument("--wceb", required=True, help="path to .../datasets/combined")
     ap.add_argument("--datasets", nargs="*", default=None, help="subset names (default: all 8)")
     ap.add_argument("--out", default="cache")
+    ap.add_argument("--labeler", choices=list(LABELERS), default="overlap",
+                    help="overlap: word-overlap heuristic (default, unchanged legacy behavior). "
+                         "overlap_sequential: position-aware labeler, see "
+                         "analysis/oracle_investigation.md Part 5 -- significantly better on "
+                         "5/8 WCEB datasets but significantly WORSE on cleaneval, so a full "
+                         "rebuild should run cleaneval separately with --labeler overlap")
     ap.add_argument("--threshold", type=float, default=0.5,
                     help="min fraction of a block's tokens that must be in the GT vocab")
     ap.add_argument("--min-words", type=int, default=3,
@@ -58,7 +68,8 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
-    print(f"wceb={args.wceb}  out={args.out}  threshold={args.threshold}  min_words={args.min_words}")
+    print(f"wceb={args.wceb}  out={args.out}  labeler={args.labeler}  "
+          f"threshold={args.threshold}  min_words={args.min_words}")
 
     kept = skipped = 0
     total_blocks = total_pos = 0
@@ -73,7 +84,7 @@ def main():
             continue
 
         try:
-            out, info = process(html, gt, args.threshold, args.min_words)
+            out, info = process(html, gt, args.threshold, args.min_words, args.labeler)
         except Exception as e:
             print(f"[{ds}/{page_id[:8]}] skip ({type(e).__name__}): {e}")
             skipped += 1
@@ -84,7 +95,7 @@ def main():
             continue
 
         emb, labels = out
-        np.savez(path, emb=emb, labels=labels)
+        np.savez(path, emb=emb, labels=labels, label_method=info)
         kept += 1
         total_blocks += len(labels)
         total_pos += int(labels.sum())

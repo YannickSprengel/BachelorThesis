@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": 0.026040029109159347,
+    "ci_lo": 0.02105229428481807,
+    "ci_hi": 0.03089455713927227,
+    "frac_resamples_positive": 1.0
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": 0.008468524285714285,
+      "ci_lo": -0.0024624926071428574,
+      "ci_hi": 0.01871232335714286,
+      "frac_resamples_positive": 0.9356
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": -0.03735288075880759,
+      "ci_lo": -0.05087668800813008,
+      "ci_hi": -0.02453615338753388,
+      "frac_resamples_positive": 0.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.06047414084507045,
+      "ci_lo": 0.03508735528169014,
+      "ci_hi": 0.08403294225352113,
+      "frac_resamples_positive": 1.0
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": 0.05895174764321971,
+      "ci_lo": 0.050416164757070336,
+      "ci_hi": 0.06707924891225525,
+      "frac_resamples_positive": 1.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.07892018333333332,
+      "ci_lo": 0.05182568138888888,
+      "ci_hi": 0.10528631458333335,
+      "frac_resamples_positive": 1.0
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.022901463768115943,
+      "ci_lo": 0.011326084259259262,
+      "ci_hi": 0.03378593655394524,
+      "frac_resamples_positive": 1.0
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": 0.021389165217391305,
+      "ci_lo": -0.009224393478260868,
+      "ci_hi": 0.04770460586956521,
+      "frac_resamples_positive": 0.9262
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.04935168508287293,
+      "ci_lo": 0.028387119337016573,
+      "ci_hi": 0.06724755248618783,
+      "frac_resamples_positive": 0.9999
+    }
+  },
+  "label_a": "oracle_sequential",
+  "label_b": "oracle",
+  "path_a": "results/oracle/wceb_sequential.csv",
+  "path_b": "results/oracle/wceb.csv"
+}

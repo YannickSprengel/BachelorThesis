@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": 0.02256521329987453,
+    "ci_lo": 0.017695548720200755,
+    "ci_hi": 0.027311179479297364,
+    "frac_resamples_positive": 1.0
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": 0.0054675271428571435,
+      "ci_lo": -0.0052801908571428555,
+      "ci_hi": 0.015629271357142857,
+      "frac_resamples_positive": 0.8484
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": -0.03844894308943089,
+      "ci_lo": -0.0518213639905149,
+      "ci_hi": -0.025604214803523036,
+      "frac_resamples_positive": 0.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.05633338028169014,
+      "ci_lo": 0.032034402112676066,
+      "ci_hi": 0.07819073133802817,
+      "frac_resamples_positive": 1.0
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": 0.05381751124002901,
+      "ci_lo": 0.04544340393401014,
+      "ci_hi": 0.06167908734590282,
+      "frac_resamples_positive": 1.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.07239636666666667,
+      "ci_lo": 0.045793513333333334,
+      "ci_hi": 0.09769077430555553,
+      "frac_resamples_positive": 1.0
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.020423594202898552,
+      "ci_lo": 0.00919369496779388,
+      "ci_hi": 0.030952360869565213,
+      "frac_resamples_positive": 0.9996
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": 0.01886475652173913,
+      "ci_lo": -0.011451869565217388,
+      "ci_hi": 0.044546685869565214,
+      "frac_resamples_positive": 0.9052
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.046257254143646405,
+      "ci_lo": 0.025540413950276245,
+      "ci_hi": 0.06389530787292817,
+      "frac_resamples_positive": 0.9998
+    }
+  },
+  "label_a": "oracle_sequential",
+  "label_b": "oracle_weighted",
+  "path_a": "results/oracle/wceb_sequential.csv",
+  "path_b": "results/oracle/wceb_weighted.csv"
+}

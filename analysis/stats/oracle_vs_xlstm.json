@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": -0.0011805786700125472,
+    "ci_lo": -0.004175776304893352,
+    "ci_hi": 0.0017972194542032625,
+    "frac_resamples_positive": 0.2209
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": -0.007654451428571432,
+      "ci_lo": -0.01011150867857143,
+      "ci_hi": -0.005038401821428577,
+      "frac_resamples_positive": 0.0
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": 0.02447867479674797,
+      "ci_lo": 0.016947706470189703,
+      "ci_hi": 0.03290116097560975,
+      "frac_resamples_positive": 1.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": -0.0035741408450704285,
+      "ci_lo": -0.020844439788732395,
+      "ci_hi": 0.021652021126760537,
+      "frac_resamples_positive": 0.3382
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": -0.021566427846265408,
+      "ci_lo": -0.025990128625815807,
+      "ci_hi": -0.017159081907179113,
+      "frac_resamples_positive": 0.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.05256347222222221,
+      "ci_lo": 0.02283551763888889,
+      "ci_hi": 0.08507237069444444,
+      "frac_resamples_positive": 0.9998
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.004157407407407407,
+      "ci_lo": -0.002519900724637679,
+      "ci_hi": 0.011719505152979062,
+      "frac_resamples_positive": 0.8773
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": -0.0009747391304347812,
+      "ci_lo": -0.01406179326086957,
+      "ci_hi": 0.01276053782608695,
+      "frac_resamples_positive": 0.4386
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.003596883977900554,
+      "ci_lo": -0.010162705662983426,
+      "ci_hi": 0.01914681243093921,
+      "frac_resamples_positive": 0.6668
+    }
+  },
+  "label_a": "oracle",
+  "label_b": "xlstm",
+  "path_a": "results/oracle/wceb.csv",
+  "path_b": "results_from_server/runs/sweep_xlstm/20260728-232824_xlstm_a44f24a6/wceb.csv"
+}

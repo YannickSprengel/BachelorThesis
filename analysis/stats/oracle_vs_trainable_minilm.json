@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": 0.03380720602258469,
+    "ci_lo": 0.029101477672521962,
+    "ci_hi": 0.03850923602885822,
+    "frac_resamples_positive": 1.0
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": -0.011596887142857141,
+      "ci_lo": -0.01611899285714286,
+      "ci_hi": -0.00705280578571429,
+      "frac_resamples_positive": 0.0
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": 0.04447159214092142,
+      "ci_lo": 0.03390890802845528,
+      "ci_hi": 0.055790137195121936,
+      "frac_resamples_positive": 1.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.0186165352112676,
+      "ci_lo": -0.008898816197183102,
+      "ci_hi": 0.05620815774647886,
+      "frac_resamples_positive": 0.8853
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": 0.0396994300217549,
+      "ci_lo": 0.03059936345177665,
+      "ci_hi": 0.04913188362944162,
+      "frac_resamples_positive": 1.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.10699558888888888,
+      "ci_lo": 0.0760812559722222,
+      "ci_hi": 0.1406941952777778,
+      "frac_resamples_positive": 1.0
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.031018818035426735,
+      "ci_lo": 0.021777130032206115,
+      "ci_hi": 0.04126576400966184,
+      "frac_resamples_positive": 1.0
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": 0.05068360869565216,
+      "ci_lo": 0.024790032391304343,
+      "ci_hi": 0.08078605217391302,
+      "frac_resamples_positive": 1.0
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.053048104972375686,
+      "ci_lo": 0.031247706767955803,
+      "ci_hi": 0.07687860814917127,
+      "frac_resamples_positive": 1.0
+    }
+  },
+  "label_a": "oracle",
+  "label_b": "trainable_minilm",
+  "path_a": "results/oracle/wceb.csv",
+  "path_b": "results_from_server/trainable_minilm/wceb.csv"
+}

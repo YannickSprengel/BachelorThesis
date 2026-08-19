@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": 0.14919597189460476,
+    "ci_lo": 0.140473614510665,
+    "ci_hi": 0.15805354703262234,
+    "frac_resamples_positive": 1.0
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": 0.1506482957142857,
+      "ci_lo": 0.13317551507142855,
+      "ci_hi": 0.16890270835714283,
+      "frac_resamples_positive": 1.0
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": 0.17509713550135503,
+      "ci_lo": 0.15441495457317073,
+      "ci_hi": 0.19678112225609756,
+      "frac_resamples_positive": 1.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.13668497183098594,
+      "ci_lo": 0.06867501725352113,
+      "ci_hi": 0.2137810933098591,
+      "frac_resamples_positive": 1.0
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": 0.14082533212472806,
+      "ci_lo": 0.12626496519216826,
+      "ci_hi": 0.15576146553662074,
+      "frac_resamples_positive": 1.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.1778877611111111,
+      "ci_lo": 0.13705757847222222,
+      "ci_hi": 0.22033667930555553,
+      "frac_resamples_positive": 1.0
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.09896174879227053,
+      "ci_lo": 0.07944985483091786,
+      "ci_hi": 0.11881836767310791,
+      "frac_resamples_positive": 1.0
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": 0.30963372173913045,
+      "ci_lo": 0.24225877891304348,
+      "ci_hi": 0.378248662826087,
+      "frac_resamples_positive": 1.0
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.14853462983425414,
+      "ci_lo": 0.107308866160221,
+      "ci_hi": 0.19164051947513816,
+      "frac_resamples_positive": 1.0
+    }
+  },
+  "label_a": "trainable_minilm",
+  "label_b": "bilstm_combined",
+  "path_a": "results_from_server/trainable_minilm/wceb.csv",
+  "path_b": "results_from_server/runs/sweep_bilstm/20260724-172733_bilstm_6b7c4d35/wceb.csv"
+}

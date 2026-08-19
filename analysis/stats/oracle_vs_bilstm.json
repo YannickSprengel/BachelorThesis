@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": 0.18300317791718945,
+    "ci_lo": 0.17381914908406523,
+    "ci_hi": 0.19254120026348812,
+    "frac_resamples_positive": 1.0
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": 0.13905140857142856,
+      "ci_lo": 0.1201819377142857,
+      "ci_hi": 0.1585701149642857,
+      "frac_resamples_positive": 1.0
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": 0.21956872764227642,
+      "ci_lo": 0.1973768381436314,
+      "ci_hi": 0.24263552794715446,
+      "frac_resamples_positive": 1.0
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.15530150704225354,
+      "ci_lo": 0.08700208415492956,
+      "ci_hi": 0.23273303943661966,
+      "frac_resamples_positive": 1.0
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": 0.18052476214648297,
+      "ci_lo": 0.16463489234952863,
+      "ci_hi": 0.19675168952139233,
+      "frac_resamples_positive": 1.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.2848833499999999,
+      "ci_lo": 0.23989156069444445,
+      "ci_hi": 0.3304851768055555,
+      "frac_resamples_positive": 1.0
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.12998056682769724,
+      "ci_lo": 0.10995867061191626,
+      "ci_hi": 0.15016408071658613,
+      "frac_resamples_positive": 1.0
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": 0.36031733043478265,
+      "ci_lo": 0.29481857347826085,
+      "ci_hi": 0.42918460239130435,
+      "frac_resamples_positive": 1.0
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.20158273480662983,
+      "ci_lo": 0.16029180856353592,
+      "ci_hi": 0.24570435234806628,
+      "frac_resamples_positive": 1.0
+    }
+  },
+  "label_a": "oracle",
+  "label_b": "bilstm",
+  "path_a": "results/oracle/wceb.csv",
+  "path_b": "results_from_server/runs/sweep_bilstm/20260724-172733_bilstm_6b7c4d35/wceb.csv"
+}

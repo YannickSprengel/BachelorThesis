@@ -1,0 +1,75 @@
+{
+  "metric": "rouge5",
+  "n_common": 3985,
+  "n_only_a": 0,
+  "n_only_b": 0,
+  "overall": {
+    "n_pages": 3985,
+    "mean_diff": 0.003474815809284819,
+    "ci_lo": 0.002839236957340025,
+    "ci_hi": 0.004086244861982434,
+    "frac_resamples_positive": 1.0
+  },
+  "by_dataset": {
+    "cetd": {
+      "n_pages": 700,
+      "mean_diff": 0.0030009971428571433,
+      "ci_lo": 0.0022910605000000007,
+      "ci_hi": 0.003793442214285714,
+      "frac_resamples_positive": 1.0
+    },
+    "cleaneval": {
+      "n_pages": 738,
+      "mean_diff": 0.0010960623306233062,
+      "ci_lo": -0.0010285240176151757,
+      "ci_hi": 0.002703012262872628,
+      "frac_resamples_positive": 0.87
+    },
+    "cleanportaleval": {
+      "n_pages": 71,
+      "mean_diff": 0.004140760563380283,
+      "ci_lo": 0.0008029820422535193,
+      "ci_hi": 0.00873254471830986,
+      "frac_resamples_positive": 0.9998
+    },
+    "dragnet": {
+      "n_pages": 1379,
+      "mean_diff": 0.005134236403190718,
+      "ci_lo": 0.004155942621464831,
+      "ci_hi": 0.006237304767947789,
+      "frac_resamples_positive": 1.0
+    },
+    "google-trends-2017": {
+      "n_pages": 180,
+      "mean_diff": 0.006523816666666666,
+      "ci_lo": 0.003406141805555555,
+      "ci_hi": 0.011149953194444439,
+      "frac_resamples_positive": 1.0
+    },
+    "l3s-gn1": {
+      "n_pages": 621,
+      "mean_diff": 0.0024778695652173926,
+      "ci_lo": 0.0003759663446054769,
+      "ci_hi": 0.004108646779388084,
+      "frac_resamples_positive": 0.9863
+    },
+    "readability": {
+      "n_pages": 115,
+      "mean_diff": 0.0025244086956521736,
+      "ci_lo": 0.0009436502173913039,
+      "ci_hi": 0.0045045258695652155,
+      "frac_resamples_positive": 1.0
+    },
+    "scrapinghub": {
+      "n_pages": 181,
+      "mean_diff": 0.003094430939226521,
+      "ci_lo": 0.0011935132596685109,
+      "ci_hi": 0.00551556837016575,
+      "frac_resamples_positive": 1.0
+    }
+  },
+  "label_a": "oracle_weighted",
+  "label_b": "oracle",
+  "path_a": "results/oracle/wceb_weighted.csv",
+  "path_b": "results/oracle/wceb.csv"
+}

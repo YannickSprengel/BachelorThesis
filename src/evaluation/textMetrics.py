@@ -82,6 +82,58 @@ def _lcs_length(a, b):
     return prev[-1]
 
 
+def _lcs_with_endpoint(a, b):
+    """LCS of a vs b, PLUS the (first, last) index range in b spanned by the chosen
+    alignment -- used by blockReconstruction.overlap_labels_sequential to know where in
+    the ground-truth token stream a block's match sits, not just how long it is.
+
+    Deliberately does NOT use _lcs_length's swap-for-space trick (swapping a/b so the
+    rolling array tracks the shorter side): callers need indices into b specifically
+    (b is always the ground-truth window here), and swapping would silently flip which
+    sequence the returned indices refer to. b is bounded by the caller's window cap, so
+    the extra space this costs is negligible.
+
+    On a length tie between two ways to extend the alignment, keeps the one with the
+    SMALLER last-index (minimal-consumption alignment) -- this is the endpoint contract
+    callers rely on: advancing a search cursor to the smallest position that still
+    justifies the match, not an arbitrary maximal-reach one.
+
+    Returns (length, first_index_in_b, last_index_in_b); first/last are None if length==0.
+    O(len(a)*len(b)) time, O(len(b)) space.
+    """
+    if not a or not b:
+        return 0, None, None
+
+    def better(c1, c2):
+        """Prefer higher length; on a tie, prefer the smaller last-index (and treat a
+        0-length cell, which has no meaningful endpoint, as ties among themselves)."""
+        if c1[0] != c2[0]:
+            return c1 if c1[0] > c2[0] else c2
+        if c1[0] == 0:
+            return c1
+        return c1 if c1[2] <= c2[2] else c2
+
+    NONE_CELL = (0, None, None)
+    prev = [NONE_CELL] * (len(b) + 1)
+    for x in a:
+        curr = [NONE_CELL] * (len(b) + 1)
+        for j, y in enumerate(b, 1):
+            if x == y:
+                diag_len, diag_first, _diag_last = prev[j - 1]
+                first = diag_first if diag_first is not None else j - 1
+                # "up" (prev[j]) is provably dominated whenever a match is available
+                # (extending the window by one token can raise the LCS by at most 1),
+                # so only "left" (curr[j-1]) can tie/beat the fresh diagonal match --
+                # e.g. the same phrase occurring twice in b: without this comparison,
+                # the LATER occurrence would silently overwrite an equal-length match
+                # already propagated from the EARLIER one.
+                curr[j] = better((diag_len + 1, first, j - 1), curr[j - 1])
+            else:
+                curr[j] = better(prev[j], curr[j - 1])
+        prev = curr
+    return prev[-1]
+
+
 def rouge_l_f1(pred, ref):
     """ROUGE-L F1: LCS-based. Matched tokens don't need to be contiguous, just in the
     same relative order, so this tolerates insertions/deletions/reordering much better
