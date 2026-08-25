@@ -16,16 +16,25 @@ score ceiling comes from preprocessing/reconstruction rather than the tagger.
 """
 
 import argparse
+import json
 
 import torch
 
 from src.evaluation.evalCommon import run_eval, print_report
 from src.models.xlstm.xLSTMWithMiniLM import XLSTMTagger
+from src.models.xlstm.trainxLSTM import build_model
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="model.pt")
+    ap.add_argument("--config", default=None,
+                    help="run dir's config.json (embedding_dim/num_blocks/num_heads/"
+                         "context_length) -- required for any checkpoint not trained with "
+                         "default hyperparameters, e.g. anything from sweep.py/"
+                         "aggregateLODO.py. Without it this builds a default-hyperparameter "
+                         "XLSTMTagger() and load_state_dict will raise a size-mismatch error "
+                         "if that doesn't match the checkpoint.")
     ap.add_argument("--wceb", required=True, help="path to .../datasets/combined")
     ap.add_argument("--datasets", nargs="*", default=None, help="subset names (default: all)")
     ap.add_argument("--n", type=int, default=5)              # ROUGE-N, paper uses N=5
@@ -37,7 +46,11 @@ def main():
     args = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    model = XLSTMTagger().to(device)
+    if args.config:
+        with open(args.config) as f:
+            model = build_model(json.load(f)).to(device)
+    else:
+        model = XLSTMTagger().to(device)
     model.load_state_dict(torch.load(args.model, map_location=device))
     model.eval()
     n_params = sum(p.numel() for p in model.parameters())
