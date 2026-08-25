@@ -73,10 +73,17 @@ def main():
                     help="comma-separated sigmoid cutoffs to evaluate in one pass")
     ap.add_argument("--label-threshold", type=float, default=0.5)
     ap.add_argument("--out", default=None, help="output basename for a summary .json")
+    ap.add_argument("--device", default=None, choices=["cpu", "cuda"],
+                    help="force a device instead of auto-detecting; use cpu if the node's GPU "
+                         "hits a cuDNN/SM compatibility error (CUDA_VISIBLE_DEVICES doesn't "
+                         "reliably prevent this under SLURM, this flag does)")
     args = ap.parse_args()
 
     thresholds = [float(t) for t in args.thresholds.split(",")]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if args.device:
+        device = args.device
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if args.config:
         with open(args.config) as f:
